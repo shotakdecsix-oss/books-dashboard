@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 書籍ランキング</title>
+<style>
+  :root {
+    --bg: #0f111a;
+    --bg2: #161927;
+    --bg3: #1e2235;
+    --accent: #00a8e1;
+    --accent2: #0077b6;
+    --gold: #f5c518;
+    --text: #e8eaf0;
+    --text2: #9ba3b8;
+    --border: #2a2f45;
+    --card-hover: #232840;
+    --danger: #e05555;
+    --green: #4caf7d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Helvetica Neue', Arial, sans-serif; min-height: 100vh; }
+
+  /* ── SETUP MODAL ── */
+  #setup-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  #setup-overlay.show { display: flex; }
+  .setup-box {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 36px; width: 90%; max-width: 480px;
+  }
+  .setup-box h2 { font-size: 1.3rem; margin-bottom: 8px; }
+  .setup-box .subtitle { color: var(--text2); font-size: .85rem; margin-bottom: 28px; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-size: .8rem; color: var(--text2); margin-bottom: 6px; letter-spacing: .05em; }
+  .form-group input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; color: var(--text); font-size: .9rem;
+    outline: none; transition: border .2s;
+  }
+  .form-group input:focus { border-color: var(--accent); }
+  .form-group .hint { font-size: .75rem; color: var(--text2); margin-top: 5px; }
+  .form-group .hint a { color: var(--accent); text-decoration: none; }
+  .btn-primary {
+    width: 100%; background: var(--accent); border: none; border-radius: 8px;
+    padding: 12px; color: #fff; font-size: .95rem; font-weight: 600;
+    cursor: pointer; transition: background .2s;
+  }
+  .btn-primary:hover { background: var(--accent2); }
+  .privacy-note { text-align: center; font-size: .75rem; color: var(--text2); margin-top: 14px; }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 20px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 1.1rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .logo span { color: var(--text2); font-weight: 400; font-size: .8rem; margin-left: 8px; }
+  .header-status { font-size: .75rem; color: var(--text2); }
+  .header-status.ok { color: var(--green); }
+  .header-spacer { flex: 1; }
+  .btn-icon {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; color: var(--text2); font-size: .8rem; cursor: pointer;
+    transition: all .2s; white-space: nowrap;
+  }
+  .btn-icon:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ── AI PANEL ── */
+  .ai-panel {
+    background: linear-gradient(135deg, #0d1a2e 0%, #0f1520 100%);
+    border-bottom: 1px solid var(--border); padding: 18px 24px;
+  }
+  .ai-panel-inner { max-width: 960px; margin: 0 auto; }
+  .ai-label { font-size: .75rem; color: var(--accent); letter-spacing: .1em; margin-bottom: 10px; }
+  .ai-row { display: flex; gap: 10px; align-items: stretch; }
+  .ai-input {
+    flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; color: var(--text); font-size: .9rem; outline: none;
+    transition: border .2s;
+  }
+  .ai-input:focus { border-color: var(--accent); }
+  .ai-input::placeholder { color: var(--text2); }
+  .btn-search {
+    background: var(--accent); border: none; border-radius: 8px; padding: 10px 20px;
+    color: #fff; font-size: .85rem; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: background .2s;
+  }
+  .btn-search:hover { background: var(--accent2); }
+  .btn-search:disabled { opacity: .5; cursor: not-allowed; }
+  .ai-result {
+    margin-top: 14px; padding: 14px; background: var(--bg3); border-radius: 8px;
+    border: 1px solid var(--border); font-size: .88rem; line-height: 1.7;
+    display: none;
+  }
+  .ai-result.show { display: block; }
+  .ai-result .rec-title { color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+
+  /* ── MAIN ── */
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 20px;
+  }
+  .control-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .controls-right { margin-left: auto; display: flex; gap: 6px; }
+  .btn-filter {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 14px; color: var(--text2); font-size: .8rem; cursor: pointer;
+    transition: all .15s; white-space: nowrap;
+  }
+  .btn-filter:hover { border-color: var(--accent); color: var(--text); }
+  .btn-filter.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Genre dropdown */
+  .genre-wrap { position: relative; }
+  .genre-btn {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 14px; color: var(--text2); font-size: .8rem; cursor: pointer;
+    transition: all .15s; white-space: nowrap; user-select: none;
+  }
+  .genre-btn:hover, .genre-btn.open { border-color: var(--accent); color: var(--text); }
+  .genre-dropdown {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px; z-index: 200; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .genre-dropdown.open { display: block; }
+  .genre-item {
+    padding: 7px 12px; border-radius: 5px; font-size: .82rem; cursor: pointer;
+    color: var(--text2); transition: all .1s;
+  }
+  .genre-item:hover { background: var(--bg3); color: var(--text); }
+  .genre-item.active { color: var(--accent); font-weight: 600; }
+
+  .result-count { font-size: .8rem; color: var(--text2); align-self: center; }
+
+  /* ── GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; cursor: pointer; transition: transform .15s, box-shadow .15s, border-color .15s;
+    display: flex; flex-direction: column;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.4); border-color: var(--accent); }
+  .card-img-wrap { position: relative; aspect-ratio: 3/4; background: var(--bg3); overflow: hidden; }
+  .card-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .card-img-wrap .no-img {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 3rem; color: var(--border);
+  }
+  .card-rank {
+    position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.75);
+    color: var(--gold); font-size: .75rem; font-weight: 700; padding: 2px 7px;
+    border-radius: 4px; backdrop-filter: blur(4px);
+  }
+  .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .card-title { font-size: .82rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-author { font-size: .75rem; color: var(--text2); }
+  .card-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
+  .star { color: var(--gold); font-size: .75rem; }
+  .rating-val { font-size: .75rem; color: var(--text2); }
+  .price { font-size: .78rem; color: var(--green); font-weight: 600; margin-top: auto; }
+  .caption-snippet { font-size: .72rem; color: var(--text2); margin-top: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* ── LOAD MORE ── */
+  .load-more-wrap { text-align: center; margin-top: 32px; }
+  .btn-load-more {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 32px; color: var(--text2); font-size: .9rem; cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-load-more:hover { border-color: var(--accent); color: var(--text); }
+  .btn-load-more:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── EMPTY / LOADING ── */
+  .loading, .empty {
+    grid-column: 1/-1; text-align: center; padding: 60px; color: var(--text2); font-size: .9rem;
+  }
+  .spinner {
+    width: 32px; height: 32px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite;
+    margin: 0 auto 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── DETAIL MODAL ── */
+  #detail-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8);
+    z-index: 500; align-items: center; justify-content: center; padding: 16px;
+  }
+  #detail-overlay.show { display: flex; }
+  .detail-box {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; position: relative;
+  }
+  .detail-header { padding: 20px 24px; display: flex; gap: 20px; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .detail-cover { width: 100px; flex-shrink: 0; }
+  .detail-cover img { width: 100%; border-radius: 6px; }
+  .detail-cover .no-img-lg { width: 100px; height: 133px; background: var(--bg3); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: var(--border); }
+  .detail-info { flex: 1; }
+  .detail-title { font-size: 1.1rem; font-weight: 700; line-height: 1.3; margin-bottom: 6px; }
+  .detail-author { color: var(--text2); font-size: .85rem; margin-bottom: 8px; }
+  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: .82rem; color: var(--text2); margin-bottom: 10px; }
+  .detail-price { color: var(--green); font-weight: 700; font-size: 1rem; }
+  .detail-body { padding: 20px 24px; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section h3 { font-size: .8rem; color: var(--accent); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 8px; }
+  .detail-section p { font-size: .87rem; line-height: 1.8; color: var(--text2); white-space: pre-wrap; }
+  .detail-close {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 50%;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 1rem; color: var(--text2); transition: all .15s;
+    flex-shrink: 0; margin-left: auto;
+  }
+  .detail-close:hover { border-color: var(--danger); color: var(--danger); }
+  .btn-analyze {
+    background: linear-gradient(135deg, #0077b6, #00b4d8); border: none; border-radius: 8px;
+    padding: 10px 20px; color: #fff; font-size: .85rem; font-weight: 600;
+    cursor: pointer; transition: opacity .2s;
+  }
+  .btn-analyze:hover { opacity: .85; }
+  .btn-analyze:disabled { opacity: .4; cursor: not-allowed; }
+  .analysis-box {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-top: 14px; font-size: .87rem; line-height: 1.8;
+    color: var(--text); display: none;
+  }
+  .analysis-box.show { display: block; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px);
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 20px; font-size: .85rem; color: var(--text); z-index: 2000;
+    transition: transform .3s; pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    header { padding: 0 12px; gap: 10px; }
+    .logo span { display: none; }
+    .ai-panel { padding: 14px 12px; }
+    main { padding: 16px 10px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .detail-header { flex-direction: column; }
+    .detail-cover { width: 80px; }
+    .controls-right { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SETUP OVERLAY -->
+<div id="setup-overlay">
+  <div class="setup-box">
+    <h2>📚 書籍ダッシュボード</h2>
+    <p class="subtitle">初回のみAPIキーを入力してください。次回から自動でログインします。</p>
+    <div class="form-group">
+      <label>楽天アプリID（必須）</label>
+      <input type="text" id="rakuten-key-input" placeholder="例: 1234567890" autocomplete="off">
+      <div class="hint">→ <a href="https://webservice.rakuten.co.jp/app/create" target="_blank">webservice.rakuten.co.jp</a> で無料取得</div>
+    </div>
+    <div class="form-group">
+      <label>Claude APIキー（AI機能・任意）</label>
+      <input type="password" id="claude-key-input" placeholder="sk-ant-..." autocomplete="off">
+      <div class="hint">→ <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> で取得</div>
+    </div>
+    <button class="btn-primary" onclick="saveKeys()">保存して始める</button>
+    <p class="privacy-note">キーはブラウザのlocalStorageにのみ保存されます。外部には送信されません。</p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
+  <div class="header-status" id="api-status">接続中...</div>
+  <div class="header-spacer"></div>
+  <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
+</header>
+
+<!-- AI PANEL -->
+<div class="ai-panel">
+  <div class="ai-panel-inner">
+    <div class="ai-label">✨ AI おすすめ — 気分を伝えると、Claudeが書籍リストから直接選びます</div>
+    <div class="ai-row">
+      <input class="ai-input" id="mood-input" type="text"
+        placeholder="例: 仕事に疲れた夜に読めるほっこりした話 / 歴史が好きで骨太な小説が読みたい"
+        onkeydown="if(event.key==='Enter') doAiRecommend()">
+      <button class="btn-search" id="ai-btn" onclick="doAiRecommend()">✨ 探す</button>
+    </div>
+    <div class="ai-result" id="ai-result"></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main>
+  <div class="controls">
+    <div class="control-group">
+      <div class="genre-wrap">
+        <div class="genre-btn" id="genre-btn" onclick="toggleGenre()">ジャンル ▼</div>
+        <div class="genre-dropdown" id="genre-dropdown">
+          <div class="genre-item active" onclick="setGenre('', this)">すべて</div>
+          <div class="genre-item" onclick="setGenre('小説', this)">小説・文学</div>
+          <div class="genre-item" onclick="setGenre('ビジネス', this)">ビジネス</div>
+          <div class="genre-item" onclick="setGenre('実用', this)">実用・暮らし</div>
+          <div class="genre-item" onclick="setGenre('コミック', this)">コミック</div>
+          <div class="genre-item" onclick="setGenre('SF', this)">SF・ファンタジー</div>
+          <div class="genre-item" onclick="setGenre('歴史', this)">歴史・時代</div>
+          <div class="genre-item" onclick="setGenre('英語 語学', this)">語学・英語</div>
+          <div class="genre-item" onclick="setGenre('趣味', this)">趣味・スポーツ</div>
+          <div class="genre-item" onclick="setGenre('科学 IT', this)">科学・テクノロジー</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="control-group" id="era-btns">
+      <button class="btn-filter active" onclick="setEra('', this)">年代 すべて</button>
+      <button class="btn-filter" onclick="setEra('2020', this)">2020年代</button>
+      <button class="btn-filter" onclick="setEra('2010', this)">2010年代</button>
+      <button class="btn-filter" onclick="setEra('2000', this)">2000年代</button>
+      <button class="btn-filter" onclick="setEra('1990', this)">1990年代</button>
+    </div>
+
+    <div class="control-group controls-right" id="sort-btns">
+      <button class="btn-filter active" onclick="setSort('sales', this)">売れ筋順</button>
+      <button class="btn-filter" onclick="setSort('reviewAverage', this)">★ 評価順</button>
+      <button class="btn-filter" onclick="setSort('-releaseDate', this)">新着順</button>
+    </div>
+
+    <div class="result-count" id="result-count"></div>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="loading">
+      <div class="spinner"></div>
+      書籍リストを取得中...
+    </div>
+  </div>
+  <div class="load-more-wrap">
+    <button class="btn-load-more" id="load-more-btn" onclick="loadMore()" style="display:none">もっと見る</button>
+  </div>
+</main>
+
+<!-- DETAIL MODAL -->
+<div id="detail-overlay" onclick="closeDetailOverlay(event)">
+  <div class="detail-box" id="detail-box">
+    <div class="detail-header" id="detail-header"></div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── STATE ──
+let rakutenKey = '';
+let claudeKey = '';
+let books = [];
+let page = 1;
+let currentSort = 'sales';
+let currentGenre = '';
+let currentEra = '';
+let totalResults = 0;
+const PAGE_SIZE = 20;
+
+// ── KEYS ──
+function loadKeys() {
+  rakutenKey = localStorage.getItem('rakuten_app_id') || '';
+  claudeKey  = localStorage.getItem('claude_api_key') || '';
+  if (!rakutenKey) {
+    document.getElementById('setup-overlay').classList.add('show');
+  } else {
+    initDashboard();
+  }
+}
+
+function saveKeys() {
+  const rk = document.getElementById('rakuten-key-input').value.trim();
+  const ck = document.getElementById('claude-key-input').value.trim();
+  if (!rk) { showToast('楽天アプリIDを入力してください'); return; }
+  localStorage.setItem('rakuten_app_id', rk);
+  if (ck) localStorage.setItem('claude_api_key', ck);
+  rakutenKey = rk;
+  claudeKey = ck;
+  document.getElementById('setup-overlay').classList.remove('show');
+  initDashboard();
+}
+
+function openSettings() {
+  document.getElementById('rakuten-key-input').value = localStorage.getItem('rakuten_app_id') || '';
+  document.getElementById('claude-key-input').value = localStorage.getItem('claude_api_key') || '';
+  document.getElementById('setup-overlay').classList.add('show');
+}
+
+// ── INIT ──
+function initDashboard() {
+  const status = document.getElementById('api-status');
+  status.textContent = '接続中...';
+  fetchBooks(true);
+}
+
+// ── FETCH ──
+async function fetchBooks(reset = false) {
+  if (reset) { page = 1; books = []; }
+  const grid = document.getElementById('grid');
+  if (reset) grid.innerHTML = '<div class="loading"><div class="spinner"></div>書籍を取得中...</div>';
+
+  const keyword = currentGenre || 'ベストセラー';
+
+  let salesDateFrom = '';
+  let salesDateTo = '';
+  if (currentEra === '2020') { salesDateFrom = '20200101'; salesDateTo = '20291231'; }
+  else if (currentEra === '2010') { salesDateFrom = '20100101'; salesDateTo = '20191231'; }
+  else if (currentEra === '2000') { salesDateFrom = '20000101'; salesDateTo = '20091231'; }
+  else if (currentEra === '1990') { salesDateFrom = '19900101'; salesDateTo = '19991231'; }
+
+  const params = new URLSearchParams({
+    format: 'json',
+    applicationId: rakutenKey,
+    keyword: keyword,
+    sort: currentSort,
+    hits: PAGE_SIZE,
+    page: page,
+    outOfStockFlag: 0,
+  });
+  if (salesDateFrom) {
+    params.set('salesDateFrom', salesDateFrom);
+    params.set('salesDateTo', salesDateTo);
+  }
+
+  const url = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error_description || data.error);
+
+    totalResults = data.count || 0;
+    const items = (data.Items || []).map(i => i.Item);
+
+    if (reset) books = items;
+    else books = [...books, ...items];
+
+    renderGrid(reset ? 0 : books.length - items.length);
+    updateStatus(true);
+    updateResultCount();
+
+    const loadBtn = document.getElementById('load-more-btn');
+    if (books.length < totalResults && items.length === PAGE_SIZE) {
+      loadBtn.style.display = 'inline-block';
+      loadBtn.disabled = false;
+    } else {
+      loadBtn.style.display = 'none';
+    }
+
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = `<div class="empty">⚠ データ取得に失敗しました<br><small style="color:var(--danger)">${esc(err.message)}</small><br><small style="color:var(--text2);margin-top:8px;display:block">楽天アプリIDを確認してください</small></div>`;
+    updateStatus(false);
+  }
+}
+
+function loadMore() {
+  page++;
+  document.getElementById('load-more-btn').disabled = true;
+  fetchBooks(false);
+}
+
+// ── RENDER ──
+function renderGrid(startFrom) {
+  const grid = document.getElementById('grid');
+  if (startFrom === 0) grid.innerHTML = '';
+
+  if (!books.length) {
+    grid.innerHTML = '<div class="empty">📭 書籍が見つかりませんでした</div>';
+    return;
+  }
+
+  books.slice(startFrom).forEach((book, i) => {
+    const rank = startFrom + i + 1;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => openDetail(book);
+
+    const stars = starString(parseFloat(book.reviewAverage) || 0);
+    const caption = (book.itemCaption || '').slice(0, 80);
+
+    card.innerHTML = `
+      <div class="card-img-wrap">
+        ${book.largeImageUrl
+          ? `<img src="${esc(book.largeImageUrl)}" alt="${esc(book.title)}" loading="lazy">`
+          : `<div class="no-img">📖</div>`}
+        <div class="card-rank">${rank}</div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${esc(book.title)}</div>
+        <div class="card-author">${esc(book.author || '著者不明')}</div>
+        <div class="card-meta">
+          <span class="star">${stars}</span>
+          <span class="rating-val">${book.reviewAverage || '―'}（${book.reviewCount || 0}件）</span>
+        </div>
+        <div class="price">¥${Number(book.itemPrice || 0).toLocaleString()}</div>
+        ${caption ? `<div class="caption-snippet">${esc(caption)}…</div>` : ''}
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function updateResultCount() {
+  document.getElementById('result-count').textContent =
+    totalResults ? `${totalResults.toLocaleString()}件中 ${books.length}件表示` : '';
+}
+
+function updateStatus(ok) {
+  const el = document.getElementById('api-status');
+  el.textContent = ok ? '● API 接続済み' : '● API エラー';
+  el.className = 'header-status' + (ok ? ' ok' : '');
+}
+
+// ── FILTER / SORT ──
+function setSort(val, btn) {
+  currentSort = val;
+  document.querySelectorAll('#sort-btns .btn-filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  fetchBooks(true);
+}
+
+function setEra(val, btn) {
+  currentEra = val;
+  document.querySelectorAll('#era-btns .btn-filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  fetchBooks(true);
+}
+
+let genreOpen = false;
+function toggleGenre() {
+  genreOpen = !genreOpen;
+  document.getElementById('genre-dropdown').classList.toggle('open', genreOpen);
+  document.getElementById('genre-btn').classList.toggle('open', genreOpen);
+}
+
+function setGenre(val, el) {
+  currentGenre = val;
+  document.querySelectorAll('.genre-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('genre-btn').textContent = (val ? el.textContent + ' ▼' : 'ジャンル ▼');
+  genreOpen = false;
+  document.getElementById('genre-dropdown').classList.remove('open');
+  document.getElementById('genre-btn').classList.remove('open');
+  fetchBooks(true);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.genre-wrap') && genreOpen) {
+    genreOpen = false;
+    document.getElementById('genre-dropdown').classList.remove('open');
+    document.getElementById('genre-btn').classList.remove('open');
+  }
+});
+
+// ── DETAIL MODAL ──
+// Store current book separately to avoid JSON serialization in onclick
+let currentDetailBook = null;
+
+function openDetail(book) {
+  currentDetailBook = book;
+  const header = document.getElementById('detail-header');
+  const body   = document.getElementById('detail-body');
+  const stars  = starString(parseFloat(book.reviewAverage) || 0);
+
+  header.innerHTML = `
+    <div class="detail-cover">
+      ${book.largeImageUrl
+        ? `<img src="${esc(book.largeImageUrl)}" alt="${esc(book.title)}">`
+        : `<div class="no-img-lg">📖</div>`}
+    </div>
+    <div class="detail-info">
+      <div class="detail-title">${esc(book.title)}</div>
+      <div class="detail-author">${esc(book.author || '著者不明')}${book.publisherName ? ' / ' + esc(book.publisherName) : ''}</div>
+      <div class="detail-meta">
+        <span>${stars} ${book.reviewAverage || '―'} (${book.reviewCount || 0}件)</span>
+        <span>📅 ${esc(book.salesDate || '不明')}</span>
+      </div>
+      <div class="detail-price">¥${Number(book.itemPrice || 0).toLocaleString()}</div>
+      ${book.isbn ? `<div style="font-size:.75rem;color:var(--text2);margin-top:4px">ISBN: ${esc(book.isbn)}</div>` : ''}
+    </div>
+    <div class="detail-close" onclick="closeDetail()">✕</div>`;
+
+  const caption = book.itemCaption || 'あらすじ情報なし';
+  const hasClaude = !!claudeKey;
+
+  body.innerHTML = `
+    <div class="detail-section">
+      <h3>あらすじ</h3>
+      <p>${esc(caption)}</p>
+    </div>
+    <div class="detail-section">
+      <h3>🤖 AI 分析</h3>
+      ${hasClaude
+        ? `<button class="btn-analyze" id="analyze-btn" onclick="analyzeBook()">
+             Claudeに分析してもらう
+           </button>
+           <div class="analysis-box" id="analysis-box"></div>`
+        : `<p style="color:var(--text2);font-size:.85rem">Claude APIキーを設定するとAI分析が使えます。
+             <button class="btn-icon" onclick="openSettings()" style="margin-left:8px;cursor:pointer">⚙ 設定</button>
+           </p>`}
+    </div>`;
+
+  document.getElementById('detail-overlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('show');
+  document.body.style.overflow = '';
+  currentDetailBook = null;
+}
+
+function closeDetailOverlay(e) {
+  if (e.target === document.getElementById('detail-overlay')) closeDetail();
+}
+
+// ── AI ANALYSIS ──
+async function analyzeBook() {
+  const book = currentDetailBook;
+  if (!book) return;
+  const btn  = document.getElementById('analyze-btn');
+  const box  = document.getElementById('analysis-box');
+  if (!claudeKey) { showToast('Claude APIキーが未設定です'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '分析中...';
+  box.classList.add('show');
+  box.innerHTML = '<span style="color:var(--accent)">分析中...</span>';
+
+  const prompt = `以下の書籍を分析してください。
+
+タイトル: ${book.title}
+著者: ${book.author || '不明'}
+出版社: ${book.publisherName || '不明'}
+発売日: ${book.salesDate || '不明'}
+評価: ${book.reviewAverage || '不明'} (${book.reviewCount || 0}件)
+あらすじ: ${book.itemCaption || 'なし'}
+
+以下の観点で日本語で分析してください：
+**こんな人におすすめ**
+どんな読者層・気分・目的に合うか（150字程度）
+
+**読みどころ**
+本書の魅力・特徴・注目ポイント（150字程度）
+
+**類似作品**
+好きな人が次に読むべき本を2〜3冊、簡単な理由とともに紹介`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': claudeKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Claude API ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    box.innerHTML = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === 'content_block_delta' && ev.delta?.text) {
+            text += ev.delta.text;
+            box.innerHTML = markdownToHtml(text);
+          }
+        } catch {}
+      }
+    }
+
+  } catch (err) {
+    box.innerHTML = `<span style="color:var(--danger)">エラー: ${esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '再分析';
+  }
+}
+
+// ── AI RECOMMEND ──
+async function doAiRecommend() {
+  if (!claudeKey) { showToast('Claude APIキーを設定してください'); openSettings(); return; }
+  const mood = document.getElementById('mood-input').value.trim();
+  if (!mood) { showToast('気分・好みを入力してください'); return; }
+  if (!books.length) { showToast('先に書籍リストを読み込んでください'); return; }
+
+  const btn = document.getElementById('ai-btn');
+  const result = document.getElementById('ai-result');
+  btn.disabled = true;
+  btn.textContent = '考え中...';
+  result.classList.add('show');
+  result.innerHTML = '<span style="color:var(--accent)">Claudeが選んでいます...</span>';
+
+  const bookList = books.slice(0, 50).map((b, i) =>
+    `${i+1}. 「${b.title}」著:${b.author||'不明'} 評価:${b.reviewAverage||'―'} あらすじ:${(b.itemCaption||'').slice(0,60)}`
+  ).join('\n');
+
+  const prompt = `以下の書籍リストの中から、ユーザーの気分・好みに合う本を3冊選んでください。
+
+【ユーザーの気分・好み】
+${mood}
+
+【書籍リスト】
+${bookList}
+
+選んだ3冊について、各冊を「**番号. タイトル**」形式で見出しにして、推薦理由を2〜3文で書いてください。日本語で、温かみのある文体で。`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': claudeKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Claude API ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    result.innerHTML = '<div class="rec-title">✨ Claudeのおすすめ</div><div id="rec-body"></div>';
+    const recBody = document.getElementById('rec-body');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === 'content_block_delta' && ev.delta?.text) {
+            text += ev.delta.text;
+            recBody.innerHTML = markdownToHtml(text);
+          }
+        } catch {}
+      }
+    }
+
+  } catch (err) {
+    result.innerHTML = `<span style="color:var(--danger)">エラー: ${esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ 探す';
+  }
+}
+
+// ── HELPERS ──
+function starString(avg) {
+  const full  = Math.floor(avg);
+  const half  = (avg - full) >= 0.5 ? 1 : 0;
+  const empty = 5 - full - half;
+  return '★'.repeat(Math.max(0, full)) + (half ? '½' : '') + '☆'.repeat(Math.max(0, empty));
+}
+
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function markdownToHtml(md) {
+  return md
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.+)$/gm, '<h4 style="color:var(--accent);margin:10px 0 4px;font-size:.85rem">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 style="color:var(--accent);margin:12px 0 6px">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2 style="margin:12px 0 6px">$1</h2>')
+    .replace(/\n/g, '<br>');
+}
+
+function showToast(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ── BOOT ──
+loadKeys();
+</script>
+</body>
+</html>
