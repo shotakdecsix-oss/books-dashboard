@@ -377,7 +377,7 @@ const PAGE_SIZE = 20;
 
 // ── KEYS ──
 function loadKeys() {
-  rakutenKey = localStorage.getItem('rakuten_app_id') || '';
+  rakutenKey = localStorage.getItem('rakuten_app_id') || '20becb25-81f6-4dd6-b278-c9ac3807d8f0';
   claudeKey  = localStorage.getItem('claude_api_key') || '';
   if (!rakutenKey) {
     document.getElementById('setup-overlay').classList.add('show');
@@ -399,7 +399,7 @@ function saveKeys() {
 }
 
 function openSettings() {
-  document.getElementById('rakuten-key-input').value = localStorage.getItem('rakuten_app_id') || '';
+  document.getElementById('rakuten-key-input').value = localStorage.getItem('rakuten_app_id') || '20becb25-81f6-4dd6-b278-c9ac3807d8f0';
   document.getElementById('claude-key-input').value = localStorage.getItem('claude_api_key') || '';
   document.getElementById('setup-overlay').classList.add('show');
 }
