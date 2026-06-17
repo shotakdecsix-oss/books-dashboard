@@ -440,7 +440,7 @@ async function fetchBooks(reset = false) {
     params.set('salesDateTo', salesDateTo);
   }
 
-  const url = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
+  const url = `https://corsproxy.io/?url=${encodeURIComponent('https://app.rakuten.co.jp/services/api/BooksBook/Search/20170404?' + params)}`;
 
   try {
     const res = await fetch(url);
