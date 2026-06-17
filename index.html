@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:19 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:34 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -813,11 +813,17 @@ async function doAiRecommend() {
     // ── Step 1: 複数ソート×複数ページで候補プールを収集 ──
     const candidates = [];
     const seenKeys = {};
-    const sorts = ['sales', 'reviewAverage', '-releaseDate'];
+    // 評価順を重視（ページ数多め）、売れ筋・新着は補完目的
+    const sorts = [
+      { sort: 'reviewAverage', pages: 6 },
+      { sort: 'sales',         pages: 2 },
+      { sort: '-releaseDate',  pages: 2 },
+    ];
     const keyword = currentGenre || 'ベストセラー';
+    const MIN_REVIEW_COUNT = 10; // 評価件数の足切り
 
-    for (const sort of sorts) {
-      for (let p = 1; p <= 4; p++) {
+    for (const { sort, pages } of sorts) {
+      for (let p = 1; p <= pages; p++) {
         const params = new URLSearchParams({
           format: 'json',
           applicationId: rakutenAppId,
@@ -827,6 +833,7 @@ async function doAiRecommend() {
           hits: 20,
           page: p,
           outOfStockFlag: 0,
+          reviewCountFrom: MIN_REVIEW_COUNT,
         });
         if (currentEra === '2020') { params.set('salesDateFrom', '20200101'); params.set('salesDateTo', '20291231'); }
         else if (currentEra === '2010') { params.set('salesDateFrom', '20100101'); params.set('salesDateTo', '20191231'); }
