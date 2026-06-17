@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:39 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:47 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -853,7 +853,7 @@ async function doAiRecommend() {
           if (data.error) break;
           for (const item of (data.Items || []).map(i => i.Item)) {
             const key = item.isbn || item.title;
-            if (!seenKeys[key] && parseInt(item.reviewCount || 0) >= MIN_REVIEW_COUNT) {
+            if (!seenKeys[key] && Number(item.reviewCount) >= MIN_REVIEW_COUNT) {
               seenKeys[key] = true;
               candidates.push(item);
             }
@@ -966,7 +966,7 @@ function renderAiPicks(picks, isbnToBook, mood) {
         <div class="card-author">${esc(book.author || '著者不明')}</div>
         <div class="card-meta">
           <span class="star">${stars}</span>
-          <span class="rating-val">${book.reviewAverage || '―'}</span>
+          <span class="rating-val">${book.reviewAverage || '―'}（${book.reviewCount || 0}件）</span>
         </div>
         <div class="price">¥${Number(book.itemPrice || 0).toLocaleString()}</div>
       </div>`;
