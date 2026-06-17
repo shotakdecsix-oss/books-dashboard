@@ -265,11 +265,11 @@
 <div id="setup-overlay">
   <div class="setup-box">
     <h2>📚 書籍ダッシュボード</h2>
-    <p class="subtitle">APIキーを設定してください。</p>
+    <p class="subtitle">初回のみAPIキーを入力してください。次回から自動でログインします。</p>
     <div class="form-group">
-      <label>Google Books APIキー（必須）</label>
-      <input type="text" id="google-key-input" placeholder="AIza..." autocomplete="off">
-      <div class="hint">→ <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> で無料取得（Books API を有効化）</div>
+      <label>楽天 Access Key（必須）</label>
+      <input type="text" id="rakuten-key-input" placeholder="Access Key を入力" autocomplete="off">
+      <div class="hint">→ <a href="https://webservice.rakuten.co.jp/app/list" target="_blank">webservice.rakuten.co.jp</a> のアプリ詳細 → Access Key</div>
     </div>
     <div class="form-group">
       <label>Claude APIキー（AI機能・任意）</label>
@@ -283,10 +283,10 @@
 
 <!-- HEADER -->
 <header>
-  <div class="logo">📚 書籍ランキング<span>Google Books × Claude AI</span></div>
+  <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 23:04 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 23:29 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -334,8 +334,9 @@
     </div>
 
     <div class="control-group controls-right" id="sort-btns">
-      <button class="btn-filter active" onclick="setSort('relevance', this)">関連順</button>
-      <button class="btn-filter" onclick="setSort('newest', this)">新着順</button>
+      <button class="btn-filter active" onclick="setSort('sales', this)">売れ筋順</button>
+      <button class="btn-filter" onclick="setSort('reviewAverage', this)">★ 評価順</button>
+      <button class="btn-filter" onclick="setSort('-releaseDate', this)">新着順</button>
     </div>
 
     <div class="result-count" id="result-count"></div>
@@ -365,11 +366,11 @@
 
 <script>
 // ── STATE ──
-let googleKey = '';
+let rakutenKey = '';
 let claudeKey = '';
 let books = [];
 let page = 1;
-let currentSort = 'relevance';
+let currentSort = 'sales';
 let currentGenre = '';
 let currentEra = '';
 let totalResults = 0;
@@ -377,9 +378,9 @@ const PAGE_SIZE = 20;
 
 // ── KEYS ──
 function loadKeys() {
-  googleKey = localStorage.getItem('google_books_key') || '';
+  rakutenKey = localStorage.getItem('rakuten_access_key') || '';
   claudeKey  = localStorage.getItem('claude_api_key') || '';
-  if (!googleKey) {
+  if (!rakutenKey) {
     document.getElementById('setup-overlay').classList.add('show');
   } else {
     initDashboard();
@@ -387,19 +388,19 @@ function loadKeys() {
 }
 
 function saveKeys() {
-  const gk = document.getElementById('google-key-input').value.trim();
+  const rk = document.getElementById('rakuten-key-input').value.trim();
   const ck = document.getElementById('claude-key-input').value.trim();
-  if (!gk) { showToast('Google Books APIキーを入力してください'); return; }
-  localStorage.setItem('google_books_key', gk);
+  if (!rk) { showToast('楽天 Access Key を入力してください'); return; }
+  localStorage.setItem('rakuten_access_key', rk);
   if (ck) localStorage.setItem('claude_api_key', ck);
-  googleKey = gk;
+  rakutenKey = rk;
   claudeKey = ck;
   document.getElementById('setup-overlay').classList.remove('show');
   initDashboard();
 }
 
 function openSettings() {
-  document.getElementById('google-key-input').value = localStorage.getItem('google_books_key') || '';
+  document.getElementById('rakuten-key-input').value = localStorage.getItem('rakuten_access_key') || '';
   document.getElementById('claude-key-input').value = localStorage.getItem('claude_api_key') || '';
   document.getElementById('setup-overlay').classList.add('show');
 }
@@ -417,25 +418,25 @@ async function fetchBooks(reset = false) {
   const grid = document.getElementById('grid');
   if (reset) grid.innerHTML = '<div class="loading"><div class="spinner"></div>書籍を取得中...</div>';
 
-  const startIndex = (page - 1) * PAGE_SIZE;
-
-  let q = currentGenre || 'ベストセラー 日本語';
-  if (currentEra === '2020') q += ' after:2020 before:2029';
-  else if (currentEra === '2010') q += ' after:2010 before:2019';
-  else if (currentEra === '2000') q += ' after:2000 before:2009';
-  else if (currentEra === '1990') q += ' after:1990 before:1999';
+  const keyword = currentGenre || 'ベストセラー';
 
   const params = new URLSearchParams({
-    q,
-    langRestrict: 'ja',
-    maxResults: PAGE_SIZE,
-    startIndex,
-    orderBy: currentSort,
-    printType: 'books',
-    key: googleKey,
+    format: 'json',
+    applicationId: rakutenKey,
+    keyword,
+    sort: currentSort,
+    hits: PAGE_SIZE,
+    page,
+    outOfStockFlag: 0,
   });
 
-  const url = `https://www.googleapis.com/books/v1/volumes?${params}`;
+  if (currentEra === '2020') { params.set('salesDateFrom', '20200101'); params.set('salesDateTo', '20291231'); }
+  else if (currentEra === '2010') { params.set('salesDateFrom', '20100101'); params.set('salesDateTo', '20191231'); }
+  else if (currentEra === '2000') { params.set('salesDateFrom', '20000101'); params.set('salesDateTo', '20091231'); }
+  else if (currentEra === '1990') { params.set('salesDateFrom', '19900101'); params.set('salesDateTo', '19991231'); }
+
+  const rakutenUrl = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
+  const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
 
   try {
     const res = await fetch(url);
@@ -444,26 +445,10 @@ async function fetchBooks(reset = false) {
       throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
     }
     const data = await res.json();
+    if (data.error) throw new Error(data.error_description || data.error);
 
-    totalResults = Math.min(data.totalItems || 0, 200);
-    const items = (data.items || []).map(v => {
-      const info = v.volumeInfo || {};
-      const sale = v.saleInfo || {};
-      return {
-        id: v.id,
-        title: info.title || '',
-        author: (info.authors || []).join(', '),
-        publisherName: info.publisher || '',
-        salesDate: (info.publishedDate || '').slice(0, 7),
-        reviewAverage: info.averageRating ? info.averageRating.toFixed(1) : '',
-        reviewCount: info.ratingsCount || 0,
-        itemPrice: sale.listPrice?.amount || 0,
-        itemCaption: info.description || '',
-        largeImageUrl: (info.imageLinks?.thumbnail || '').replace('http:', 'https:'),
-        isbn: (info.industryIdentifiers || []).find(i => i.type === 'ISBN_13')?.identifier || '',
-        itemUrl: info.infoLink || '',
-      };
-    });
+    totalResults = data.count || 0;
+    const items = (data.Items || []).map(i => i.Item);
 
     if (reset) books = items;
     else books = [...books, ...items];
@@ -526,7 +511,7 @@ function renderGrid(startFrom) {
           <span class="star">${stars}</span>
           <span class="rating-val">${book.reviewAverage || '―'}（${book.reviewCount || 0}件）</span>
         </div>
-        ${book.itemPrice ? `<div class="price">¥${Number(book.itemPrice).toLocaleString()}</div>` : ''}
+        <div class="price">¥${Number(book.itemPrice || 0).toLocaleString()}</div>
         ${caption ? `<div class="caption-snippet">${esc(caption)}…</div>` : ''}
       </div>`;
     grid.appendChild(card);
