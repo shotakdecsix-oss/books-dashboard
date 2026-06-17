@@ -291,7 +291,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 23:45 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 00:05 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -448,10 +448,16 @@ async function fetchBooks(reset = false) {
   else if (currentEra === '2000') { params.set('salesDateFrom', '20000101'); params.set('salesDateTo', '20091231'); }
   else if (currentEra === '1990') { params.set('salesDateFrom', '19900101'); params.set('salesDateTo', '19991231'); }
 
-  const url = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
+  const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
+  const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        'Referer': 'https://shotakdecsix-oss.github.io/books-dashboard/',
+        'Origin': 'https://shotakdecsix-oss.github.io',
+      }
+    });
     if (!res.ok) {
       const body = await res.text();
       throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
