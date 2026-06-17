@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:59 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 02:08 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -799,7 +799,7 @@ async function analyzeBook() {
   }
 }
 
-// ── AI RECOMMEND（Prime Video方式: 候補プール収集 → JSON選書 → カード表示） ──
+// ── AI RECOMMEND（逆転アプローチ: Claude知識から選書 → Rakutenで情報補完） ──
 async function doAiRecommend() {
   if (!claudeKey) { showToast('Claude APIキーを設定してください'); openSettings(); return; }
   const mood = document.getElementById('mood-input').value.trim();
@@ -810,122 +810,76 @@ async function doAiRecommend() {
   btn.disabled = true;
   btn.textContent = '考え中...';
   result.classList.add('show');
-  result.innerHTML = '<span style="color:var(--accent)">候補リストを取得中...</span>';
+  result.innerHTML = '<span style="color:var(--accent)">Claudeが選書中...</span>';
 
   try {
-    // ── Step 1: 複数ソート×複数ページで候補プールを収集 ──
-    const candidates = [];
-    const seenKeys = {};
-    // 評価順を重視（ページ数多め）、売れ筋・新着は補完目的
-    const sorts = [
-      { sort: 'reviewAverage', pages: 6 },
-      { sort: 'sales',         pages: 2 },
-      { sort: '-releaseDate',  pages: 2 },
-    ];
-    const keyword = currentGenre || 'ベストセラー';
+    // ── Step 1: Claudeの知識から直接8冊を推薦させる ──
+    const genreHint = currentGenre ? `ジャンル: ${currentGenre}、` : '';
+    const eraHint = currentEra ? `年代: ${currentEra}年代、` : '';
+    const contextHint = (genreHint || eraHint) ? `（${genreHint}${eraHint}を考慮すること）` : '';
 
-    for (const { sort, pages } of sorts) {
-      for (let p = 1; p <= pages; p++) {
-        const params = new URLSearchParams({
-          format: 'json',
-          applicationId: rakutenAppId,
-          accessKey: rakutenKey,
-          keyword,
-          sort,
-          hits: 20,
-          page: p,
-          outOfStockFlag: 0,
-        });
-        if (currentEra === '2020') { params.set('salesDateFrom', '20200101'); params.set('salesDateTo', '20291231'); }
-        else if (currentEra === '2010') { params.set('salesDateFrom', '20100101'); params.set('salesDateTo', '20191231'); }
-        else if (currentEra === '2000') { params.set('salesDateFrom', '20000101'); params.set('salesDateTo', '20091231'); }
-        else if (currentEra === '1990') { params.set('salesDateFrom', '19900101'); params.set('salesDateTo', '19991231'); }
+    const sysPrompt = `あなたは日本の書籍に精通した書店員です。ユーザーの気分・好みに合う本を8冊推薦してください。
+条件:
+- 日本で広く知られ楽天ブックスで購入できる本を優先
+- 国内作家・翻訳作品どちらも可
+- ISBNは13桁の数字のみ記載（不確かな場合は空文字にすること）
+- 以下のJSON配列のみを返す（マークダウン・説明文は一切不要）
+[{"title":"書名","author":"著者名","isbn":"","reason":"推薦理由20字以内"}]`;
 
-        const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
-        const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
-        try {
-          const res = await fetch(url, {
-            headers: {
-              'Referer': 'https://shotakdecsix-oss.github.io/books-dashboard/',
-              'Origin': 'https://shotakdecsix-oss.github.io',
-            }
-          });
-          if (!res.ok) break;
-          const data = await res.json();
-          if (data.error) break;
-          for (const item of (data.Items || []).map(i => i.Item)) {
-            const key = item.isbn || item.title;
-            if (!seenKeys[key] && Number(item.reviewCount) >= MIN_REVIEW_COUNT) {
-              seenKeys[key] = true;
-              candidates.push(item);
-            }
-          }
-        } catch { break; }
-        if (candidates.length >= 150) break;
-      }
-      if (candidates.length >= 150) break;
-    }
-
-    result.innerHTML = `<span style="color:var(--accent)">Claudeが選んでいます...（${candidates.length}冊から選書中）</span>`;
-
-    // ── Step 2: 候補リストをClaudeに渡す ──
-    const lines = candidates.map((b, i) => {
-      const isbn = b.isbn || '';
-      const title = b.title || '';
-      const author = b.author || '不明';
-      const rating = b.reviewAverage || '?';
-      const caption = (b.itemCaption || '').slice(0, 60).replace(/\n/g, ' ');
-      return `${i + 1}. [${isbn}] ${title} / ${author} ★${rating} ${caption}`;
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': claudeKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1200,
+        system: sysPrompt,
+        messages: [{ role: 'user', content: `気分・好み: "${mood}"${contextHint}` }],
+      }),
     });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    let text = d.content[0].text.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
+    const recommendations = JSON.parse(text);
 
-    const isbnToBook = {};
-    candidates.forEach(b => { isbnToBook[b.isbn || b.title] = b; });
+    result.innerHTML = `<span style="color:var(--accent)">楽天で書籍情報を取得中...（${recommendations.length}冊）</span>`;
 
-    const sysPrompt = 'You are a Japanese book concierge. You receive a numbered list of books and a mood/preference. Select exactly 6 ISBNs that best match. CRITICAL RULES: (1) ONLY use ISBNs from the provided list, never invent. (2) Return ONLY valid JSON array, no markdown. Format: [{"isbn":"...","reason":"<日本語20字以内の一言>"}]';
-
-    const uPrompt = `気分・好み: "${mood}"\n\n候補リスト（この中からのみ選ぶこと）:\n${lines.join('\n')}\n\nJSON配列で6冊選んでください。`;
-
-    const callClaude = async (lineSubset, count) => {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': claudeKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 800,
-          system: sysPrompt,
-          messages: [{ role: 'user', content: `気分・好み: "${mood}"\n\n候補リスト:\n${lineSubset.join('\n')}\n\nJSON配列で${count}冊選んでください。` }],
-        }),
+    // ── Step 2: 各書籍をRakutenで検索して価格・画像・評価を取得 ──
+    const enriched = [];
+    for (const rec of recommendations) {
+      // ISBN13が確かなら優先、なければタイトル検索
+      const keyword = (rec.isbn && /^\d{13}$/.test(rec.isbn)) ? rec.isbn : rec.title;
+      const params = new URLSearchParams({
+        format: 'json',
+        applicationId: rakutenAppId,
+        accessKey: rakutenKey,
+        keyword,
+        hits: 3,
+        outOfStockFlag: 0,
       });
-      const d = await r.json();
-      if (d.error) throw new Error(d.error.message);
-      const text = d.content[0].text.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
-      return JSON.parse(text);
-    };
-
-    let picks = await callClaude(lines, 6);
-    let validPicks = picks.filter(p => !!isbnToBook[p.isbn]);
-
-    // 不正IDがあればリトライ
-    if (validPicks.length < 6) {
-      const usedIds = {};
-      validPicks.forEach(p => { usedIds[p.isbn] = true; });
-      const remaining = lines.filter(l => {
-        const m = l.match(/^\d+\. \[([^\]]+)\]/);
-        return m && !usedIds[m[1]];
-      });
+      const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
+      const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
       try {
-        const more = await callClaude(remaining, 6 - validPicks.length);
-        validPicks = [...validPicks, ...more.filter(p => !!isbnToBook[p.isbn])].slice(0, 6);
-      } catch {}
+        const res = await fetch(url, {
+          headers: {
+            'Referer': 'https://shotakdecsix-oss.github.io/books-dashboard/',
+            'Origin': 'https://shotakdecsix-oss.github.io',
+          }
+        });
+        const data = res.ok ? await res.json() : {};
+        const items = (data.Items || []).map(i => i.Item);
+        enriched.push({ ...rec, rakuten: items[0] || null });
+      } catch {
+        enriched.push({ ...rec, rakuten: null });
+      }
     }
 
     // ── Step 3: AI選書セクションとして表示 ──
-    renderAiPicks(validPicks, isbnToBook, mood);
+    renderAiPicks(enriched, mood);
     result.classList.remove('show');
 
   } catch (err) {
@@ -936,7 +890,7 @@ async function doAiRecommend() {
   }
 }
 
-function renderAiPicks(picks, isbnToBook, mood) {
+function renderAiPicks(picks, mood) {
   const wrap = document.getElementById('ai-picks-wrap');
   wrap.innerHTML = `
     <div class="ai-picks-section">
@@ -949,28 +903,34 @@ function renderAiPicks(picks, isbnToBook, mood) {
     </div>`;
   const grid = document.getElementById('ai-pick-grid');
   picks.forEach((pick, idx) => {
-    const book = isbnToBook[pick.isbn];
-    if (!book) return;
+    const book = pick.rakuten;
+    const title  = book?.title  || pick.title;
+    const author = book?.author || pick.author || '著者不明';
+    const imgUrl = book?.largeImageUrl;
+    const stars  = book ? starString(parseFloat(book.reviewAverage) || 0) : '';
+    const priceStr = book ? `¥${Number(book.itemPrice || 0).toLocaleString()}` : null;
+
     const card = document.createElement('div');
     card.className = 'ai-book-card';
-    card.onclick = () => openDetail(book);
-    const stars = starString(parseFloat(book.reviewAverage) || 0);
+    if (book) card.onclick = () => openDetail(book);
     card.innerHTML = `
       <div class="card-img-wrap" style="position:relative">
-        ${book.largeImageUrl
-          ? `<img src="${esc(book.largeImageUrl)}" alt="${esc(book.title)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+        ${imgUrl
+          ? `<img src="${esc(imgUrl)}" alt="${esc(title)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
           : `<div class="no-img">📖</div>`}
         <div class="ai-card-rank">${idx + 1}</div>
         <div class="ai-reason-overlay">${esc(pick.reason)}</div>
       </div>
       <div class="card-body">
-        <div class="card-title">${esc(book.title)}</div>
-        <div class="card-author">${esc(book.author || '著者不明')}</div>
-        <div class="card-meta">
+        <div class="card-title">${esc(title)}</div>
+        <div class="card-author">${esc(author)}</div>
+        ${book?.reviewAverage ? `<div class="card-meta">
           <span class="star">${stars}</span>
-          <span class="rating-val">${book.reviewAverage || '―'}（${book.reviewCount || 0}件）</span>
+          <span class="rating-val">${book.reviewAverage}（${book.reviewCount || 0}件）</span>
+        </div>` : ''}
+        <div class="price" style="${!book ? 'color:var(--text2);font-size:.72rem' : ''}">
+          ${priceStr || '楽天未掲載'}
         </div>
-        <div class="price">¥${Number(book.itemPrice || 0).toLocaleString()}</div>
       </div>`;
     grid.appendChild(card);
   });
