@@ -286,7 +286,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:29 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:34 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -445,8 +445,13 @@ async function fetchBooks(reset = false) {
   const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
 
   try {
+    console.log('Fetching:', url);
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('API error body:', body);
+      throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+    }
     const data = await res.json();
 
     if (data.error) throw new Error(data.error_description || data.error);
