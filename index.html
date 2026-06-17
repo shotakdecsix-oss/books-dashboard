@@ -267,9 +267,14 @@
     <h2>📚 書籍ダッシュボード</h2>
     <p class="subtitle">初回のみAPIキーを入力してください。次回から自動でログインします。</p>
     <div class="form-group">
+      <label>楽天 Application ID（必須）</label>
+      <input type="text" id="rakuten-appid-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
+      <div class="hint">→ <a href="https://webservice.rakuten.co.jp/app/list" target="_blank">webservice.rakuten.co.jp</a> のアプリ詳細 → Application ID</div>
+    </div>
+    <div class="form-group">
       <label>楽天 Access Key（必須）</label>
-      <input type="text" id="rakuten-key-input" placeholder="Access Key を入力" autocomplete="off">
-      <div class="hint">→ <a href="https://webservice.rakuten.co.jp/app/list" target="_blank">webservice.rakuten.co.jp</a> のアプリ詳細 → Access Key</div>
+      <input type="password" id="rakuten-key-input" placeholder="Access Key を入力" autocomplete="off">
+      <div class="hint">→ 同ページの Access Key（別の値です）</div>
     </div>
     <div class="form-group">
       <label>Claude APIキー（AI機能・任意）</label>
@@ -286,7 +291,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 23:29 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 23:44 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -366,6 +371,7 @@
 
 <script>
 // ── STATE ──
+let rakutenAppId = '';
 let rakutenKey = '';
 let claudeKey = '';
 let books = [];
@@ -378,9 +384,10 @@ const PAGE_SIZE = 20;
 
 // ── KEYS ──
 function loadKeys() {
-  rakutenKey = localStorage.getItem('rakuten_access_key') || '';
-  claudeKey  = localStorage.getItem('claude_api_key') || '';
-  if (!rakutenKey) {
+  rakutenAppId = localStorage.getItem('rakuten_app_id') || '';
+  rakutenKey   = localStorage.getItem('rakuten_access_key') || '';
+  claudeKey    = localStorage.getItem('claude_api_key') || '';
+  if (!rakutenAppId || !rakutenKey) {
     document.getElementById('setup-overlay').classList.add('show');
   } else {
     initDashboard();
@@ -388,11 +395,15 @@ function loadKeys() {
 }
 
 function saveKeys() {
-  const rk = document.getElementById('rakuten-key-input').value.trim();
-  const ck = document.getElementById('claude-key-input').value.trim();
-  if (!rk) { showToast('楽天 Access Key を入力してください'); return; }
+  const aid = document.getElementById('rakuten-appid-input').value.trim();
+  const rk  = document.getElementById('rakuten-key-input').value.trim();
+  const ck  = document.getElementById('claude-key-input').value.trim();
+  if (!aid) { showToast('楽天 Application ID を入力してください'); return; }
+  if (!rk)  { showToast('楽天 Access Key を入力してください'); return; }
+  localStorage.setItem('rakuten_app_id', aid);
   localStorage.setItem('rakuten_access_key', rk);
   if (ck) localStorage.setItem('claude_api_key', ck);
+  rakutenAppId = aid;
   rakutenKey = rk;
   claudeKey = ck;
   document.getElementById('setup-overlay').classList.remove('show');
@@ -400,8 +411,9 @@ function saveKeys() {
 }
 
 function openSettings() {
-  document.getElementById('rakuten-key-input').value = localStorage.getItem('rakuten_access_key') || '';
-  document.getElementById('claude-key-input').value = localStorage.getItem('claude_api_key') || '';
+  document.getElementById('rakuten-appid-input').value = localStorage.getItem('rakuten_app_id') || '';
+  document.getElementById('rakuten-key-input').value   = localStorage.getItem('rakuten_access_key') || '';
+  document.getElementById('claude-key-input').value    = localStorage.getItem('claude_api_key') || '';
   document.getElementById('setup-overlay').classList.add('show');
 }
 
@@ -422,7 +434,8 @@ async function fetchBooks(reset = false) {
 
   const params = new URLSearchParams({
     format: 'json',
-    applicationId: rakutenKey,
+    applicationId: rakutenAppId,
+    accessKey: rakutenKey,
     keyword,
     sort: currentSort,
     hits: PAGE_SIZE,
@@ -435,8 +448,7 @@ async function fetchBooks(reset = false) {
   else if (currentEra === '2000') { params.set('salesDateFrom', '20000101'); params.set('salesDateTo', '20091231'); }
   else if (currentEra === '1990') { params.set('salesDateFrom', '19900101'); params.set('salesDateTo', '19991231'); }
 
-  const rakutenUrl = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
-  const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
+  const url = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
 
   try {
     const res = await fetch(url);
