@@ -265,12 +265,7 @@
 <div id="setup-overlay">
   <div class="setup-box">
     <h2>📚 書籍ダッシュボード</h2>
-    <p class="subtitle">初回のみAPIキーを入力してください。次回から自動でログインします。</p>
-    <div class="form-group">
-      <label>楽天アプリID（必須）</label>
-      <input type="text" id="rakuten-key-input" placeholder="例: 1234567890" autocomplete="off">
-      <div class="hint">→ <a href="https://webservice.rakuten.co.jp/app/create" target="_blank">webservice.rakuten.co.jp</a> で無料取得</div>
-    </div>
+    <p class="subtitle">Claude APIキーを設定するとAI機能が使えます（任意）。</p>
     <div class="form-group">
       <label>Claude APIキー（AI機能・任意）</label>
       <input type="password" id="claude-key-input" placeholder="sk-ant-..." autocomplete="off">
@@ -283,10 +278,10 @@
 
 <!-- HEADER -->
 <header>
-  <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
+  <div class="logo">📚 書籍ランキング<span>Google Books × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:39 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:48 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -334,9 +329,8 @@
     </div>
 
     <div class="control-group controls-right" id="sort-btns">
-      <button class="btn-filter active" onclick="setSort('sales', this)">売れ筋順</button>
-      <button class="btn-filter" onclick="setSort('reviewAverage', this)">★ 評価順</button>
-      <button class="btn-filter" onclick="setSort('-releaseDate', this)">新着順</button>
+      <button class="btn-filter active" onclick="setSort('relevance', this)">関連順</button>
+      <button class="btn-filter" onclick="setSort('newest', this)">新着順</button>
     </div>
 
     <div class="result-count" id="result-count"></div>
@@ -366,11 +360,10 @@
 
 <script>
 // ── STATE ──
-let rakutenKey = '';
 let claudeKey = '';
 let books = [];
 let page = 1;
-let currentSort = 'sales';
+let currentSort = 'relevance';
 let currentGenre = '';
 let currentEra = '';
 let totalResults = 0;
@@ -378,29 +371,19 @@ const PAGE_SIZE = 20;
 
 // ── KEYS ──
 function loadKeys() {
-  rakutenKey = localStorage.getItem('rakuten_app_id') || '20becb25-81f6-4dd6-b278-c9ac3807d8f0';
-  claudeKey  = localStorage.getItem('claude_api_key') || '';
-  if (!rakutenKey) {
-    document.getElementById('setup-overlay').classList.add('show');
-  } else {
-    initDashboard();
-  }
+  claudeKey = localStorage.getItem('claude_api_key') || '';
+  initDashboard();
 }
 
 function saveKeys() {
-  const rk = document.getElementById('rakuten-key-input').value.trim();
   const ck = document.getElementById('claude-key-input').value.trim();
-  if (!rk) { showToast('楽天アプリIDを入力してください'); return; }
-  localStorage.setItem('rakuten_app_id', rk);
   if (ck) localStorage.setItem('claude_api_key', ck);
-  rakutenKey = rk;
   claudeKey = ck;
   document.getElementById('setup-overlay').classList.remove('show');
   initDashboard();
 }
 
 function openSettings() {
-  document.getElementById('rakuten-key-input').value = localStorage.getItem('rakuten_app_id') || '20becb25-81f6-4dd6-b278-c9ac3807d8f0';
   document.getElementById('claude-key-input').value = localStorage.getItem('claude_api_key') || '';
   document.getElementById('setup-overlay').classList.add('show');
 }
@@ -418,46 +401,52 @@ async function fetchBooks(reset = false) {
   const grid = document.getElementById('grid');
   if (reset) grid.innerHTML = '<div class="loading"><div class="spinner"></div>書籍を取得中...</div>';
 
-  const keyword = currentGenre || 'ベストセラー';
+  const startIndex = (page - 1) * PAGE_SIZE;
 
-  let salesDateFrom = '';
-  let salesDateTo = '';
-  if (currentEra === '2020') { salesDateFrom = '20200101'; salesDateTo = '20291231'; }
-  else if (currentEra === '2010') { salesDateFrom = '20100101'; salesDateTo = '20191231'; }
-  else if (currentEra === '2000') { salesDateFrom = '20000101'; salesDateTo = '20091231'; }
-  else if (currentEra === '1990') { salesDateFrom = '19900101'; salesDateTo = '19991231'; }
+  let q = currentGenre || 'ベストセラー 日本語';
+  if (currentEra === '2020') q += ' after:2020 before:2029';
+  else if (currentEra === '2010') q += ' after:2010 before:2019';
+  else if (currentEra === '2000') q += ' after:2000 before:2009';
+  else if (currentEra === '1990') q += ' after:1990 before:1999';
 
   const params = new URLSearchParams({
-    format: 'json',
-    applicationId: rakutenKey,
-    keyword: keyword,
-    sort: currentSort,
-    hits: PAGE_SIZE,
-    page: page,
-    outOfStockFlag: 0,
+    q,
+    langRestrict: 'ja',
+    maxResults: PAGE_SIZE,
+    startIndex,
+    orderBy: currentSort,
+    printType: 'books',
   });
-  if (salesDateFrom) {
-    params.set('salesDateFrom', salesDateFrom);
-    params.set('salesDateTo', salesDateTo);
-  }
 
-  const rakutenUrl = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
-  const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
+  const url = `https://www.googleapis.com/books/v1/volumes?${params}`;
 
   try {
-    console.log('Fetching:', url);
     const res = await fetch(url);
     if (!res.ok) {
       const body = await res.text();
-      console.error('API error body:', body);
       throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
     }
     const data = await res.json();
 
-    if (data.error) throw new Error(data.error_description || data.error);
-
-    totalResults = data.count || 0;
-    const items = (data.Items || []).map(i => i.Item);
+    totalResults = Math.min(data.totalItems || 0, 200);
+    const items = (data.items || []).map(v => {
+      const info = v.volumeInfo || {};
+      const sale = v.saleInfo || {};
+      return {
+        id: v.id,
+        title: info.title || '',
+        author: (info.authors || []).join(', '),
+        publisherName: info.publisher || '',
+        salesDate: (info.publishedDate || '').slice(0, 7),
+        reviewAverage: info.averageRating ? info.averageRating.toFixed(1) : '',
+        reviewCount: info.ratingsCount || 0,
+        itemPrice: sale.listPrice?.amount || 0,
+        itemCaption: info.description || '',
+        largeImageUrl: (info.imageLinks?.thumbnail || '').replace('http:', 'https:'),
+        isbn: (info.industryIdentifiers || []).find(i => i.type === 'ISBN_13')?.identifier || '',
+        itemUrl: info.infoLink || '',
+      };
+    });
 
     if (reset) books = items;
     else books = [...books, ...items];
@@ -476,7 +465,7 @@ async function fetchBooks(reset = false) {
 
   } catch (err) {
     console.error(err);
-    grid.innerHTML = `<div class="empty">⚠ データ取得に失敗しました<br><small style="color:var(--danger)">${esc(err.message)}</small><br><small style="color:var(--text2);margin-top:8px;display:block">楽天アプリIDを確認してください</small></div>`;
+    grid.innerHTML = `<div class="empty">⚠ データ取得に失敗しました<br><small style="color:var(--danger)">${esc(err.message)}</small></div>`;
     updateStatus(false);
   }
 }
@@ -520,7 +509,7 @@ function renderGrid(startFrom) {
           <span class="star">${stars}</span>
           <span class="rating-val">${book.reviewAverage || '―'}（${book.reviewCount || 0}件）</span>
         </div>
-        <div class="price">¥${Number(book.itemPrice || 0).toLocaleString()}</div>
+        ${book.itemPrice ? `<div class="price">¥${Number(book.itemPrice).toLocaleString()}</div>` : ''}
         ${caption ? `<div class="caption-snippet">${esc(caption)}…</div>` : ''}
       </div>`;
     grid.appendChild(card);
