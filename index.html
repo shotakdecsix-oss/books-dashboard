@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 02:08 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 02:14 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -850,15 +850,27 @@ async function doAiRecommend() {
 
     // ── Step 2: 各書籍をRakutenで検索して価格・画像・評価を取得 ──
     const enriched = [];
+
+    // タイトル類似度チェック（共通文字数ベース）
+    const isTitleMatch = (recTitle, rakutenTitle) => {
+      const norm = s => s.replace(/[\s　「」『』【】〈〉・]/g, '').toLowerCase();
+      const a = norm(recTitle);
+      const b = norm(rakutenTitle);
+      // 推薦タイトルの主要部分（先頭10文字）がRakuten結果に含まれるか
+      const key = a.slice(0, 10);
+      return key.length >= 2 && b.includes(key);
+    };
+
     for (const rec of recommendations) {
-      // ISBN13が確かなら優先、なければタイトル検索
-      const keyword = (rec.isbn && /^\d{13}$/.test(rec.isbn)) ? rec.isbn : rec.title;
+      // ISBN13が確かなら優先、なければ「タイトル 著者」で検索
+      const useIsbn = rec.isbn && /^\d{13}$/.test(rec.isbn);
+      const keyword = useIsbn ? rec.isbn : `${rec.title} ${rec.author}`.trim();
       const params = new URLSearchParams({
         format: 'json',
         applicationId: rakutenAppId,
         accessKey: rakutenKey,
         keyword,
-        hits: 3,
+        hits: 5,
         outOfStockFlag: 0,
       });
       const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
@@ -872,7 +884,11 @@ async function doAiRecommend() {
         });
         const data = res.ok ? await res.json() : {};
         const items = (data.Items || []).map(i => i.Item);
-        enriched.push({ ...rec, rakuten: items[0] || null });
+        // ISBNで検索した場合はそのまま、タイトル検索はマッチ確認
+        const matched = useIsbn
+          ? items[0] || null
+          : items.find(item => isTitleMatch(rec.title, item.title || '')) || null;
+        enriched.push({ ...rec, rakuten: matched });
       } catch {
         enriched.push({ ...rec, rakuten: null });
       }
