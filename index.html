@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 08:50 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 08:52 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -854,15 +854,11 @@ async function doAiRecommend() {
     for (const rec of recommendations) {
       // ISBN13が確かなら優先、なければタイトルのみで検索（著者名の表記ゆれを避ける）
       const useIsbn = rec.isbn && /^\d{13}$/.test(rec.isbn);
-      const keyword = useIsbn ? rec.isbn : rec.title.trim();
-      const params = new URLSearchParams({
-        format: 'json',
-        applicationId: rakutenAppId,
-        accessKey: rakutenKey,
-        keyword,
-        hits: 10,
-        outOfStockFlag: 0,
-      });
+      // titleパラメータ（タイトル専用検索）を使う。ISBNがある場合はkeyword検索
+      const searchParams = useIsbn
+        ? { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, keyword: rec.isbn, hits: 3, outOfStockFlag: 0 }
+        : { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, title: rec.title.trim(), hits: 10, outOfStockFlag: 0 };
+      const params = new URLSearchParams(searchParams);
       const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
       const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
       try {
