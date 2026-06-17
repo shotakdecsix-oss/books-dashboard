@@ -265,7 +265,12 @@
 <div id="setup-overlay">
   <div class="setup-box">
     <h2>📚 書籍ダッシュボード</h2>
-    <p class="subtitle">Claude APIキーを設定するとAI機能が使えます（任意）。</p>
+    <p class="subtitle">APIキーを設定してください。</p>
+    <div class="form-group">
+      <label>Google Books APIキー（必須）</label>
+      <input type="text" id="google-key-input" placeholder="AIza..." autocomplete="off">
+      <div class="hint">→ <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> で無料取得（Books API を有効化）</div>
+    </div>
     <div class="form-group">
       <label>Claude APIキー（AI機能・任意）</label>
       <input type="password" id="claude-key-input" placeholder="sk-ant-..." autocomplete="off">
@@ -281,7 +286,7 @@
   <div class="logo">📚 書籍ランキング<span>Google Books × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:48 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 23:04 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -360,6 +365,7 @@
 
 <script>
 // ── STATE ──
+let googleKey = '';
 let claudeKey = '';
 let books = [];
 let page = 1;
@@ -371,19 +377,29 @@ const PAGE_SIZE = 20;
 
 // ── KEYS ──
 function loadKeys() {
-  claudeKey = localStorage.getItem('claude_api_key') || '';
-  initDashboard();
+  googleKey = localStorage.getItem('google_books_key') || '';
+  claudeKey  = localStorage.getItem('claude_api_key') || '';
+  if (!googleKey) {
+    document.getElementById('setup-overlay').classList.add('show');
+  } else {
+    initDashboard();
+  }
 }
 
 function saveKeys() {
+  const gk = document.getElementById('google-key-input').value.trim();
   const ck = document.getElementById('claude-key-input').value.trim();
+  if (!gk) { showToast('Google Books APIキーを入力してください'); return; }
+  localStorage.setItem('google_books_key', gk);
   if (ck) localStorage.setItem('claude_api_key', ck);
+  googleKey = gk;
   claudeKey = ck;
   document.getElementById('setup-overlay').classList.remove('show');
   initDashboard();
 }
 
 function openSettings() {
+  document.getElementById('google-key-input').value = localStorage.getItem('google_books_key') || '';
   document.getElementById('claude-key-input').value = localStorage.getItem('claude_api_key') || '';
   document.getElementById('setup-overlay').classList.add('show');
 }
@@ -416,6 +432,7 @@ async function fetchBooks(reset = false) {
     startIndex,
     orderBy: currentSort,
     printType: 'books',
+    key: googleKey,
   });
 
   const url = `https://www.googleapis.com/books/v1/volumes?${params}`;
