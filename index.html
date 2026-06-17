@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 08:38 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 08:46 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -874,14 +874,18 @@ async function doAiRecommend() {
         });
         const data = res.ok ? await res.json() : {};
         const items = (data.Items || []).map(i => i.Item);
+        console.log(`[AI picks] "${rec.title}" → status=${res.status} hits=${items.length}`, items.slice(0,3).map(i=>i.title));
         // ISBNで検索した場合はそのまま、タイトル検索はマッチ確認
         const matched = useIsbn
           ? items[0] || null
           : items.find(item => isTitleMatch(rec.title, item.title || '')) || null;
-        enriched.push({ ...rec, rakuten: matched });
-      } catch {
-        enriched.push({ ...rec, rakuten: null });
+        enriched.push({ ...rec, rakuten: matched, _debug: { status: res.status, hits: items.length, first: items[0]?.title || '' } });
+      } catch (e) {
+        console.error(`[AI picks] "${rec.title}" → fetch error:`, e);
+        enriched.push({ ...rec, rakuten: null, _debug: { status: 0, hits: -1, first: String(e) } });
       }
+      // レート制限対策
+      await new Promise(r => setTimeout(r, 250));
     }
 
     // ── Step 3: AI選書セクションとして表示 ──
@@ -949,7 +953,13 @@ function renderAiPicks(picks, mood) {
           <span class="rating-val">${book.reviewAverage}（${book.reviewCount || 0}件）</span>
         </div>` : ''}
         <div class="price" style="${!priceStr ? 'color:var(--text2);font-size:.72rem' : ''}">
-          ${priceStr || '楽天未掲載'}
+          ${priceStr || (() => {
+            const d = pick._debug;
+            if (!d) return '楽天未掲載';
+            if (d.hits === -1) return `取得エラー`;
+            if (d.hits === 0) return `楽天未掲載（0件）`;
+            return `楽天未掲載（${d.hits}件・不一致）`;
+          })()}
         </div>
       </div>`;
     grid.appendChild(card);
