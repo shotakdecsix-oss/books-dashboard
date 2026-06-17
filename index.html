@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:34 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 01:39 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -833,7 +833,6 @@ async function doAiRecommend() {
           hits: 20,
           page: p,
           outOfStockFlag: 0,
-          reviewCountFrom: MIN_REVIEW_COUNT,
         });
         if (currentEra === '2020') { params.set('salesDateFrom', '20200101'); params.set('salesDateTo', '20291231'); }
         else if (currentEra === '2010') { params.set('salesDateFrom', '20100101'); params.set('salesDateTo', '20191231'); }
@@ -854,7 +853,10 @@ async function doAiRecommend() {
           if (data.error) break;
           for (const item of (data.Items || []).map(i => i.Item)) {
             const key = item.isbn || item.title;
-            if (!seenKeys[key]) { seenKeys[key] = true; candidates.push(item); }
+            if (!seenKeys[key] && parseInt(item.reviewCount || 0) >= MIN_REVIEW_COUNT) {
+              seenKeys[key] = true;
+              candidates.push(item);
+            }
           }
         } catch { break; }
         if (candidates.length >= 150) break;
