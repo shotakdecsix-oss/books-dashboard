@@ -286,7 +286,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:34 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/17 22:39 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -441,7 +441,7 @@ async function fetchBooks(reset = false) {
     params.set('salesDateTo', salesDateTo);
   }
 
-  const rakutenUrl = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
+  const rakutenUrl = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
   const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
 
   try {
