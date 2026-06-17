@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 02:14 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 02:18 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -906,6 +906,15 @@ async function doAiRecommend() {
   }
 }
 
+// タイトル一致チェック（表紙・価格取得用）
+function isTitleMatch(recTitle, rakutenTitle) {
+  const norm = s => s.replace(/[\s　「」『』【】〈〉・。、]/g, '').toLowerCase();
+  const a = norm(recTitle);
+  const b = norm(rakutenTitle);
+  const key = a.slice(0, 8);
+  return key.length >= 2 && b.includes(key);
+}
+
 function renderAiPicks(picks, mood) {
   const wrap = document.getElementById('ai-picks-wrap');
   wrap.innerHTML = `
@@ -920,15 +929,18 @@ function renderAiPicks(picks, mood) {
   const grid = document.getElementById('ai-pick-grid');
   picks.forEach((pick, idx) => {
     const book = pick.rakuten;
-    const title  = book?.title  || pick.title;
-    const author = book?.author || pick.author || '著者不明';
-    const imgUrl = book?.largeImageUrl;
-    const stars  = book ? starString(parseFloat(book.reviewAverage) || 0) : '';
-    const priceStr = book ? `¥${Number(book.itemPrice || 0).toLocaleString()}` : null;
+    // タイトル・著者は常にClaudeの推薦内容を使う
+    const title  = pick.title;
+    const author = pick.author || '著者不明';
+    // Rakutenデータはタイトルが一致する場合のみ表紙・価格に使用
+    const matched = book && isTitleMatch(pick.title, book.title || '');
+    const imgUrl   = matched ? book.largeImageUrl : null;
+    const stars    = matched ? starString(parseFloat(book.reviewAverage) || 0) : '';
+    const priceStr = matched ? `¥${Number(book.itemPrice || 0).toLocaleString()}` : null;
 
     const card = document.createElement('div');
     card.className = 'ai-book-card';
-    if (book) card.onclick = () => openDetail(book);
+    if (matched) card.onclick = () => openDetail(book);
     card.innerHTML = `
       <div class="card-img-wrap" style="position:relative">
         ${imgUrl
@@ -940,11 +952,11 @@ function renderAiPicks(picks, mood) {
       <div class="card-body">
         <div class="card-title">${esc(title)}</div>
         <div class="card-author">${esc(author)}</div>
-        ${book?.reviewAverage ? `<div class="card-meta">
+        ${(matched && book.reviewAverage) ? `<div class="card-meta">
           <span class="star">${stars}</span>
           <span class="rating-val">${book.reviewAverage}（${book.reviewCount || 0}件）</span>
         </div>` : ''}
-        <div class="price" style="${!book ? 'color:var(--text2);font-size:.72rem' : ''}">
+        <div class="price" style="${!priceStr ? 'color:var(--text2);font-size:.72rem' : ''}">
           ${priceStr || '楽天未掲載'}
         </div>
       </div>`;
