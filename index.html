@@ -440,8 +440,7 @@ async function fetchBooks(reset = false) {
     params.set('salesDateTo', salesDateTo);
   }
 
-  const targetUrl = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
-  const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+  const url = `https://app.rakuten.co.jp/services/api/BooksBook/Search/20130522?${params}`;
 
   try {
     const res = await fetch(url);
@@ -574,7 +573,6 @@ document.addEventListener('click', e => {
 });
 
 // ── DETAIL MODAL ──
-// Store current book separately to avoid JSON serialization in onclick
 let currentDetailBook = null;
 
 function openDetail(book) {
@@ -635,7 +633,7 @@ function closeDetailOverlay(e) {
   if (e.target === document.getElementById('detail-overlay')) closeDetail();
 }
 
-// ── AI ANALYSIS ──
+// ── AI ANALYSIS（localStorageキャッシュ付き・7日間有効） ──
 async function analyzeBook() {
   const book = currentDetailBook;
   if (!book) return;
@@ -643,6 +641,24 @@ async function analyzeBook() {
   const box  = document.getElementById('analysis-box');
   if (!claudeKey) { showToast('Claude APIキーが未設定です'); return; }
 
+  // ① キャッシュチェック（7日間有効）
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  const cacheKey = `book_analysis_${book.isbn || book.title}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const { result, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < SEVEN_DAYS) {
+        box.classList.add('show');
+        box.innerHTML = markdownToHtml(result);
+        btn.textContent = '再分析（キャッシュ済）';
+        return;
+      }
+    } catch {}
+    localStorage.removeItem(cacheKey); // 期限切れキャッシュを削除
+  }
+
+  // ② キャッシュなし → API呼び出し
   btn.disabled = true;
   btn.textContent = '分析中...';
   box.classList.add('show');
@@ -712,6 +728,11 @@ async function analyzeBook() {
       }
     }
 
+    // ③ 結果をlocalStorageにキャッシュ（タイムスタンプ付き）
+    if (text) {
+      localStorage.setItem(cacheKey, JSON.stringify({ result: text, timestamp: Date.now() }));
+    }
+
   } catch (err) {
     box.innerHTML = `<span style="color:var(--danger)">エラー: ${esc(err.message)}</span>`;
   } finally {
@@ -720,7 +741,7 @@ async function analyzeBook() {
   }
 }
 
-// ── AI RECOMMEND ──
+// ── AI RECOMMEND（ボタン押下・Enterキーのみ実行） ──
 async function doAiRecommend() {
   if (!claudeKey) { showToast('Claude APIキーを設定してください'); openSettings(); return; }
   const mood = document.getElementById('mood-input').value.trim();
