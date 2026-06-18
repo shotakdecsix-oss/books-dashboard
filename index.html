@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 13:18 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 16:07 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -352,16 +352,16 @@
       <div class="genre-wrap">
         <div class="genre-btn" id="genre-btn" onclick="toggleGenre()">ジャンル ▼</div>
         <div class="genre-dropdown" id="genre-dropdown">
-          <div class="genre-item active" onclick="setGenre('', this)">すべて</div>
-          <div class="genre-item" onclick="setGenre('小説', this)">小説・文学</div>
-          <div class="genre-item" onclick="setGenre('ビジネス', this)">ビジネス</div>
-          <div class="genre-item" onclick="setGenre('実用', this)">実用・暮らし</div>
-          <div class="genre-item" onclick="setGenre('コミック', this)">コミック</div>
-          <div class="genre-item" onclick="setGenre('SF', this)">SF・ファンタジー</div>
-          <div class="genre-item" onclick="setGenre('歴史', this)">歴史・時代</div>
-          <div class="genre-item" onclick="setGenre('英語 語学', this)">語学・英語</div>
-          <div class="genre-item" onclick="setGenre('趣味', this)">趣味・スポーツ</div>
-          <div class="genre-item" onclick="setGenre('科学 IT', this)">科学・テクノロジー</div>
+          <div class="genre-item active" onclick="setGenre('001', this)">すべて</div>
+          <div class="genre-item" onclick="setGenre('001001', this)">小説・文学</div>
+          <div class="genre-item" onclick="setGenre('001006', this)">ビジネス</div>
+          <div class="genre-item" onclick="setGenre('001012', this)">実用・暮らし</div>
+          <div class="genre-item" onclick="setGenre('001020', this)">コミック</div>
+          <div class="genre-item" onclick="setGenre('001024', this)">SF・ファンタジー</div>
+          <div class="genre-item" onclick="setGenre('001005', this)">歴史・時代</div>
+          <div class="genre-item" onclick="setGenre('001017', this)">語学・英語</div>
+          <div class="genre-item" onclick="setGenre('001013', this)">趣味・スポーツ</div>
+          <div class="genre-item" onclick="setGenre('001008', this)">科学・テクノロジー</div>
         </div>
       </div>
     </div>
@@ -419,7 +419,7 @@ let claudeKey = '';
 let books = [];
 let page = 1;
 let currentSort = 'sales';
-let currentGenre = '';
+let currentGenre = '001';  // 楽天 booksGenreId（001=全書籍）
 let currentEra = '';
 let totalResults = 0;
 const PAGE_SIZE = 20;
@@ -472,13 +472,11 @@ async function fetchBooks(reset = false) {
   const grid = document.getElementById('grid');
   if (reset) grid.innerHTML = '<div class="loading"><div class="spinner"></div>書籍を取得中...</div>';
 
-  const keyword = currentGenre || 'ベストセラー';
-
   const params = new URLSearchParams({
     format: 'json',
     applicationId: rakutenAppId,
     accessKey: rakutenKey,
-    keyword,
+    booksGenreId: currentGenre,
     sort: currentSort,
     hits: PAGE_SIZE,
     page,
