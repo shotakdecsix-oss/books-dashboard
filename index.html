@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 12:18 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 12:27 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -859,8 +859,7 @@ async function doAiRecommend() {
         keyword, hits: 10, outOfStockFlag: 0,
       });
       const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
-      // &_cb でCDNキャッシュをバイパス（corsproxy.io対策）
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}&_cb=${Date.now()}`;
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
       try {
         const res = await fetch(proxyUrl, {
           cache: 'no-store',
@@ -871,11 +870,13 @@ async function doAiRecommend() {
         });
         const data = res.ok ? await res.json() : {};
         const items = (data.Items || []).map(i => i.Item || i);
+        console.log(`[AI] "${rec.title}" status=${res.status} hits=${items.length}`, items.slice(0,2).map(i=>i.title));
         const matched = useIsbn
           ? (items[0] || null)
           : (items.find(item => isTitleMatch(rec.title, item.title || '')) || null);
         enriched.push({ ...rec, rakuten: matched });
-      } catch {
+      } catch(e) {
+        console.error(`[AI] "${rec.title}" fetch error:`, e.message);
         enriched.push({ ...rec, rakuten: null });
       }
       // Rakutenレート制限対策: 次のリクエストまで2秒待機
