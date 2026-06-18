@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 16:07 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 16:52 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -352,26 +352,10 @@
       <div class="genre-wrap">
         <div class="genre-btn" id="genre-btn" onclick="toggleGenre()">ジャンル ▼</div>
         <div class="genre-dropdown" id="genre-dropdown">
-          <div class="genre-item active" onclick="setGenre('001', this)">すべて</div>
-          <div class="genre-item" onclick="setGenre('001001', this)">小説・文学</div>
-          <div class="genre-item" onclick="setGenre('001006', this)">ビジネス</div>
-          <div class="genre-item" onclick="setGenre('001012', this)">実用・暮らし</div>
-          <div class="genre-item" onclick="setGenre('001020', this)">コミック</div>
-          <div class="genre-item" onclick="setGenre('001024', this)">SF・ファンタジー</div>
-          <div class="genre-item" onclick="setGenre('001005', this)">歴史・時代</div>
-          <div class="genre-item" onclick="setGenre('001017', this)">語学・英語</div>
-          <div class="genre-item" onclick="setGenre('001013', this)">趣味・スポーツ</div>
-          <div class="genre-item" onclick="setGenre('001008', this)">科学・テクノロジー</div>
+          <div class="genre-item active" id="genre-all-item" onclick="setGenre('001', this)">すべて</div>
+          <!-- 以降は loadBookGenres() で動的生成 -->
         </div>
       </div>
-    </div>
-
-    <div class="control-group" id="era-btns">
-      <button class="btn-filter active" onclick="setEra('', this)">年代 すべて</button>
-      <button class="btn-filter" onclick="setEra('2020', this)">2020年代</button>
-      <button class="btn-filter" onclick="setEra('2010', this)">2010年代</button>
-      <button class="btn-filter" onclick="setEra('2000', this)">2000年代</button>
-      <button class="btn-filter" onclick="setEra('1990', this)">1990年代</button>
     </div>
 
     <div class="control-group controls-right" id="sort-btns">
@@ -420,7 +404,6 @@ let books = [];
 let page = 1;
 let currentSort = 'sales';
 let currentGenre = '001';  // 楽天 booksGenreId（001=全書籍）
-let currentEra = '';
 let totalResults = 0;
 const PAGE_SIZE = 20;
 
@@ -460,10 +443,78 @@ function openSettings() {
 }
 
 // ── INIT ──
-function initDashboard() {
+async function initDashboard() {
   const status = document.getElementById('api-status');
   status.textContent = '接続中...';
+  await loadBookGenres();
   fetchBooks(true);
+}
+
+// ── GENRE LOAD (BooksGenre/Search API) ──
+async function loadBookGenres() {
+  const dropdown = document.getElementById('genre-dropdown');
+  const allItem  = document.getElementById('genre-all-item');
+  // 先に「すべて」以外をクリア
+  Array.from(dropdown.children).forEach(el => {
+    if (el.id !== 'genre-all-item') el.remove();
+  });
+
+  try {
+    const params = new URLSearchParams({
+      format: 'json',
+      applicationId: rakutenAppId,
+      accessKey: rakutenKey,
+      booksGenreId: '001',
+    });
+    const url = `https://openapi.rakuten.co.jp/services/api/BooksGenre/Search/20121128?${params}`;
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // レスポンス形式を吸収: data.children / data.GenreInformation[0].children
+    let children = [];
+    if (Array.isArray(data.children)) {
+      children = data.children.map(c => c.child || c).filter(Boolean);
+    } else if (data.GenreInformation && data.GenreInformation[0]) {
+      children = (data.GenreInformation[0].children || []).map(c => c.child || c).filter(Boolean);
+    }
+
+    if (children.length > 0) {
+      children.forEach(g => {
+        if (!g.booksGenreId || !g.booksGenreName) return;
+        const el = document.createElement('div');
+        el.className = 'genre-item';
+        el.textContent = g.booksGenreName;
+        el.onclick = () => setGenre(g.booksGenreId, el);
+        dropdown.appendChild(el);
+      });
+      console.log('[Genre] API から', children.length, 'ジャンル取得');
+      return;
+    }
+  } catch (e) {
+    console.warn('[Genre] API 失敗、フォールバック使用:', e.message);
+  }
+
+  // フォールバック: 代表的なジャンルIDをハードコード
+  const fallback = [
+    { id: '001001', name: '文学・評論' },
+    { id: '001006', name: 'ビジネス・経済' },
+    { id: '001012', name: '趣味・実用' },
+    { id: '001017', name: 'コミック' },
+    { id: '001010', name: 'コンピュータ・IT' },
+    { id: '001005', name: '歴史・地理' },
+    { id: '001015', name: '語学・辞事典' },
+    { id: '001008', name: '科学・テクノロジー' },
+    { id: '001014', name: '資格・検定・就職' },
+    { id: '001016', name: '絵本・児童書' },
+  ];
+  fallback.forEach(({ id, name }) => {
+    const el = document.createElement('div');
+    el.className = 'genre-item';
+    el.textContent = name;
+    el.onclick = () => setGenre(id, el);
+    dropdown.appendChild(el);
+  });
 }
 
 // ── FETCH ──
@@ -482,11 +533,6 @@ async function fetchBooks(reset = false) {
     page,
     outOfStockFlag: 0,
   });
-
-  if (currentEra === '2020') { params.set('salesDateFrom', '20200101'); params.set('salesDateTo', '20291231'); }
-  else if (currentEra === '2010') { params.set('salesDateFrom', '20100101'); params.set('salesDateTo', '20191231'); }
-  else if (currentEra === '2000') { params.set('salesDateFrom', '20000101'); params.set('salesDateTo', '20091231'); }
-  else if (currentEra === '1990') { params.set('salesDateFrom', '19900101'); params.set('salesDateTo', '19991231'); }
 
   const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
   const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
@@ -591,13 +637,6 @@ function updateStatus(ok) {
 function setSort(val, btn) {
   currentSort = val;
   document.querySelectorAll('#sort-btns .btn-filter').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  fetchBooks(true);
-}
-
-function setEra(val, btn) {
-  currentEra = val;
-  document.querySelectorAll('#era-btns .btn-filter').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   fetchBooks(true);
 }
@@ -844,9 +883,8 @@ async function doAiRecommend() {
 
   try {
     // ── Step 1: Claudeの知識から5冊を推薦 ──
-    const genreHint = currentGenre ? `ジャンル: ${currentGenre}、` : '';
-    const eraHint   = currentEra   ? `年代: ${currentEra}年代、`  : '';
-    const ctx = (genreHint || eraHint) ? `（${genreHint}${eraHint}を考慮すること）` : '';
+    const genreHint = currentGenre && currentGenre !== '001' ? `ジャンル: ${currentGenreLabel()}、` : '';
+    const ctx = genreHint ? `（${genreHint}を考慮すること）` : '';
 
     const sysPrompt = `あなたは日本の書籍に精通した書店員です。ユーザーの気分・好みに合う本を5冊推薦してください。
 条件:
@@ -969,6 +1007,11 @@ function clearAiPicks() {
 }
 
 // ── HELPERS ──
+function currentGenreLabel() {
+  const el = document.querySelector('.genre-item.active');
+  return el ? el.textContent : '';
+}
+
 function starString(avg) {
   const full  = Math.floor(avg);
   const half  = (avg - full) >= 0.5 ? 1 : 0;
