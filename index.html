@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 17:22 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 23:36 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -396,6 +396,10 @@
 // ── CONSTANTS ──
 const MIN_REVIEW_COUNT = 10; // 評価件数の足切り（全体共通）
 
+// ── PRESET KEYS（ここに直接入力してデプロイすると入力不要になります） ──
+const RAKUTEN_APP_ID_PRESET = '20becb25-81f6-4dd6-b278-c9ac3807d8f0'; // 例: '1234567890'
+const RAKUTEN_KEY_PRESET    = 'pk_geh9Qt2dahKoG4nO3KS5rFDXLER8VZ4uSXidSvuJYUT'; // 例: 'abcdefghij'
+
 // ── STATE ──
 let rakutenAppId = '';
 let rakutenKey = '';
@@ -409,9 +413,14 @@ const PAGE_SIZE = 20;
 
 // ── KEYS ──
 function loadKeys() {
+  // プリセットが設定されていればlocalStorageに上書き保存
+  if (RAKUTEN_APP_ID_PRESET) localStorage.setItem('rakuten_app_id', RAKUTEN_APP_ID_PRESET);
+  if (RAKUTEN_KEY_PRESET)    localStorage.setItem('rakuten_access_key', RAKUTEN_KEY_PRESET);
+
   rakutenAppId = localStorage.getItem('rakuten_app_id') || '';
   rakutenKey   = localStorage.getItem('rakuten_access_key') || '';
   claudeKey    = localStorage.getItem('claude_api_key') || '';
+
   if (!rakutenAppId || !rakutenKey) {
     document.getElementById('setup-overlay').classList.add('show');
   } else {
