@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 23:53 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 23:58 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -414,12 +414,14 @@ const PAGE_SIZE = 20;
 // ── KEYS ──
 function loadKeys() {
   // URLハッシュからClaudeキーを受け取る（例: #claude=sk-ant-xxx）
-  const hashParams = new URLSearchParams(window.location.hash.slice(1));
-  const claudeFromUrl = hashParams.get('claude');
-  if (claudeFromUrl && claudeFromUrl.startsWith('sk-ant-')) {
-    localStorage.setItem('claude_api_key', claudeFromUrl);
-    history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
+  try {
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const claudeFromUrl = hashParams.get('claude');
+    if (claudeFromUrl && claudeFromUrl.length > 10) {
+      localStorage.setItem('claude_api_key', claudeFromUrl);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  } catch(e) { console.warn('hash parse error', e); }
 
   // プリセットが設定されていればlocalStorageに上書き保存
   if (RAKUTEN_APP_ID_PRESET) localStorage.setItem('rakuten_app_id', RAKUTEN_APP_ID_PRESET);
