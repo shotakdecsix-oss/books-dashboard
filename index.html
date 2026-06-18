@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 11:23 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 11:47 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -855,9 +855,10 @@ async function doAiRecommend() {
       // ISBN13が確かなら優先、なければタイトルのみで検索（著者名の表記ゆれを避ける）
       const useIsbn = rec.isbn && /^\d{13}$/.test(rec.isbn);
       // titleパラメータ（タイトル専用検索）を使う。ISBNがある場合はkeyword検索
+      // _rnd でcorsproxy.ioのキャッシュをバイパス
       const searchParams = useIsbn
-        ? { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, keyword: rec.isbn, hits: 3, outOfStockFlag: 0 }
-        : { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, title: rec.title.trim(), hits: 10, outOfStockFlag: 0 };
+        ? { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, keyword: rec.isbn, hits: 5, outOfStockFlag: 0, _rnd: Math.random().toString(36).slice(2) }
+        : { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, title: rec.title.trim(), hits: 10, outOfStockFlag: 0, _rnd: Math.random().toString(36).slice(2) };
       const params = new URLSearchParams(searchParams);
       const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
       const url = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
@@ -881,8 +882,8 @@ async function doAiRecommend() {
         console.error(`[AI picks] "${rec.title}" → fetch error:`, e);
         enriched.push({ ...rec, rakuten: null, _debug: { status: 0, hits: -1, first: String(e) } });
       }
-      // レート制限対策
-      await new Promise(r => setTimeout(r, 250));
+      // corspoxy レート制限対策
+      await new Promise(r => setTimeout(r, 500));
     }
 
     // ── Step 3: AI選書セクションとして表示 ──
