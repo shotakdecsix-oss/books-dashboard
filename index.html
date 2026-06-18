@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 12:27 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 12:42 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -799,6 +799,46 @@ async function analyzeBook() {
   }
 }
 
+// ── JSONP helper（CORSなし・プロキシなし・キャッシュ回避） ──
+function fetchRakutenJsonp(params) {
+  return new Promise((resolve, reject) => {
+    // ユニークなコールバック名でCDNキャッシュを回避
+    const cbName = `_rkCb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const script = document.createElement('script');
+    let settled = false;
+
+    window[cbName] = (data) => {
+      settled = true;
+      resolve(data);
+      try { document.head.removeChild(script); } catch {}
+      delete window[cbName];
+    };
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('JSONP timeout'));
+        try { document.head.removeChild(script); } catch {}
+        delete window[cbName];
+      }
+    }, 10000);
+
+    script.onerror = () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error('JSONP load error'));
+        delete window[cbName];
+      }
+    };
+
+    params.set('callback', cbName);
+    params.set('format', 'json');
+    script.src = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
+    document.head.appendChild(script);
+  });
+}
+
 // ── AI RECOMMEND（Claude選書 → Rakutenで情報補完） ──
 async function doAiRecommend() {
   if (!claudeKey) { showToast('Claude APIキーを設定してください'); openSettings(); return; }
@@ -846,41 +886,41 @@ async function doAiRecommend() {
     let text = d.content[0].text.trim().replace(/^```[a-z]*\n?/i,'').replace(/\n?```$/,'');
     const recs = JSON.parse(text);
 
-    // ── Step 2: 各書籍のRakutenデータを取得（2秒間隔でレート制限回避） ──
+    // ── Step 2: JSONPで楽天データを取得（CORSなし・プロキシなし・キャッシュ回避） ──
     const enriched = [];
     for (let i = 0; i < recs.length; i++) {
       const rec = recs[i];
       result.innerHTML = `<span style="color:var(--accent)">楽天で情報取得中... ${i + 1}/${recs.length}</span>`;
 
       const useIsbn = rec.isbn && /^\d{13}$/.test(rec.isbn);
-      const keyword = useIsbn ? rec.isbn : rec.title.trim();
       const params = new URLSearchParams({
-        format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey,
-        keyword, hits: 10, outOfStockFlag: 0,
+        applicationId: rakutenAppId,
+        accessKey: rakutenKey,
+        hits: 5,
+        outOfStockFlag: 0,
       });
-      const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`;
+      // ISBNがあればISBN検索（最も正確）、なければtitle+author検索（keywordより精確）
+      if (useIsbn) {
+        params.set('isbn', rec.isbn);
+      } else {
+        params.set('title', rec.title.trim());
+        if (rec.author) params.set('author', rec.author.trim());
+      }
+
       try {
-        const res = await fetch(proxyUrl, {
-          cache: 'no-store',
-          headers: {
-            'Referer': 'https://shotakdecsix-oss.github.io/books-dashboard/',
-            'Origin':  'https://shotakdecsix-oss.github.io',
-          }
-        });
-        const data = res.ok ? await res.json() : {};
+        const data = await fetchRakutenJsonp(params);
         const items = (data.Items || []).map(i => i.Item || i);
-        console.log(`[AI] "${rec.title}" status=${res.status} hits=${items.length}`, items.slice(0,2).map(i=>i.title));
+        console.log(`[AI JSONP] "${rec.title}" hits=${items.length}`, items.slice(0, 3).map(i => i.title));
         const matched = useIsbn
           ? (items[0] || null)
           : (items.find(item => isTitleMatch(rec.title, item.title || '')) || null);
         enriched.push({ ...rec, rakuten: matched });
       } catch(e) {
-        console.error(`[AI] "${rec.title}" fetch error:`, e.message);
+        console.warn(`[AI JSONP] "${rec.title}" error:`, e.message);
         enriched.push({ ...rec, rakuten: null });
       }
-      // Rakutenレート制限対策: 次のリクエストまで2秒待機
-      if (i < recs.length - 1) await new Promise(r => setTimeout(r, 2000));
+      // Rakutenレート制限対策
+      if (i < recs.length - 1) await new Promise(r => setTimeout(r, 800));
     }
 
     // ── Step 3: 表示 ──
