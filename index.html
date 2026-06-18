@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 12:54 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 13:13 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -799,40 +799,23 @@ async function analyzeBook() {
   }
 }
 
-// ── Rakuten proxy fetch（allorigins.win/get → corsproxy.io フォールバック） ──
-async function fetchRakutenJsonp(params) {
-  // タイムスタンプをRakuten URLに含めてプロキシのキャッシュを回避
-  params.set('format', 'json');
-  const _t = Date.now();
-  const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}&_t=${_t}`;
+// ── Rakuten Books fetch via corsproxy.io（title+author検索、ISBNは使わない） ──
+async function fetchRakutenByTitle(title, author) {
+  const params = new URLSearchParams({
+    applicationId: rakutenAppId,
+    accessKey: rakutenKey,
+    format: 'json',
+    title: title.trim(),
+    hits: 10,
+    outOfStockFlag: 0,
+  });
+  if (author) params.set('author', author.trim());
 
-  // ── 第1手段: api.allorigins.win/get（CORSラッパー付き、キャッシュなし） ──
-  try {
-    const res = await fetch(
-      `https://api.allorigins.win/get?url=${encodeURIComponent(rakutenUrl)}`,
-      { cache: 'no-store' }
-    );
-    if (res.ok) {
-      const wrapper = await res.json();
-      if (wrapper.contents) {
-        const data = JSON.parse(wrapper.contents);
-        console.log('[proxy:allorigins]', wrapper.status?.http_code);
-        return data;
-      }
-    }
-  } catch(e) {
-    console.warn('[allorigins error]', e.message);
-  }
-
-  // ── 第2手段: corsproxy.io フォールバック ──
-  const res = await fetch(
-    `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`,
-    { cache: 'no-store' }
-  );
-  if (!res.ok) throw new Error(`proxy HTTP ${res.status}`);
+  const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
+  const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`corsproxy HTTP ${res.status}`);
   const data = await res.json();
-  console.log('[proxy:corsproxy]');
-  return data;
+  return (data.Items || []).map(i => i.Item || i);
 }
 
 // ── AI RECOMMEND（Claude選書 → Rakutenで情報補完） ──
@@ -858,9 +841,8 @@ async function doAiRecommend() {
 条件:
 - 日本で広く知られ楽天ブックスで確実に購入できる本のみ
 - 国内作家・翻訳作品どちらも可
-- ISBNは13桁の数字のみ（不確かなら空文字）
 - 以下のJSON配列のみ返す（マークダウン・説明文不要）
-[{"title":"書名","author":"著者名","isbn":"","reason":"推薦理由20字以内"}]`;
+[{"title":"書名","author":"著者名","reason":"推薦理由20字以内"}]`;
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -882,41 +864,22 @@ async function doAiRecommend() {
     let text = d.content[0].text.trim().replace(/^```[a-z]*\n?/i,'').replace(/\n?```$/,'');
     const recs = JSON.parse(text);
 
-    // ── Step 2: JSONPで楽天データを取得（CORSなし・プロキシなし・キャッシュ回避） ──
+    // ── Step 2: Rakuten title+author検索（corsproxy経由・ISBNは使わない） ──
     const enriched = [];
     for (let i = 0; i < recs.length; i++) {
       const rec = recs[i];
       result.innerHTML = `<span style="color:var(--accent)">楽天で情報取得中... ${i + 1}/${recs.length}</span>`;
 
-      const useIsbn = rec.isbn && /^\d{13}$/.test(rec.isbn);
-      const params = new URLSearchParams({
-        applicationId: rakutenAppId,
-        accessKey: rakutenKey,
-        hits: 5,
-        outOfStockFlag: 0,
-      });
-      // ISBNがあればISBN検索（最も正確）、なければtitle+author検索（keywordより精確）
-      if (useIsbn) {
-        params.set('isbn', rec.isbn);
-      } else {
-        params.set('title', rec.title.trim());
-        if (rec.author) params.set('author', rec.author.trim());
-      }
-
       try {
-        const data = await fetchRakutenJsonp(params);
-        const items = (data.Items || []).map(i => i.Item || i);
-        console.log(`[AI proxy] "${rec.title}" hits=${items.length}`, items.slice(0, 3).map(i => i.title));
-        const matched = useIsbn
-          ? (items[0] || null)
-          : (items.find(item => isTitleMatch(rec.title, item.title || '')) || null);
+        const items = await fetchRakutenByTitle(rec.title, rec.author);
+        console.log(`[AI Rakuten] "${rec.title}" hits=${items.length}`, items.slice(0, 3).map(i => i.title));
+        const matched = items.find(item => isTitleMatch(rec.title, item.title || '')) || null;
         enriched.push({ ...rec, rakuten: matched });
       } catch(e) {
-        console.warn(`[AI proxy] "${rec.title}" error:`, e.message);
+        console.warn(`[AI Rakuten] "${rec.title}" error:`, e.message);
         enriched.push({ ...rec, rakuten: null });
       }
-      // Rakutenレート制限対策
-      if (i < recs.length - 1) await new Promise(r => setTimeout(r, 800));
+      if (i < recs.length - 1) await new Promise(r => setTimeout(r, 1000));
     }
 
     // ── Step 3: 表示 ──
@@ -957,7 +920,6 @@ function renderAiPicks(picks, mood) {
   picks.forEach((pick, idx) => {
     const book     = pick.rakuten;
     const matched  = book && isTitleMatch(pick.title, book.title || '');
-    // タイトル・著者はClaudeの推薦を使う
     const title    = pick.title;
     const author   = pick.author || '著者不明';
     const imgUrl   = matched ? (book.largeImageUrl || book.mediumImageUrl) : null;
