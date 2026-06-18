@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 13:13 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 13:18 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -799,23 +799,36 @@ async function analyzeBook() {
   }
 }
 
-// ── Rakuten Books fetch via corsproxy.io（title+author検索、ISBNは使わない） ──
+// ── Rakuten Books fetch via corsproxy.io ──
 async function fetchRakutenByTitle(title, author) {
-  const params = new URLSearchParams({
+  const baseParams = {
     applicationId: rakutenAppId,
     accessKey: rakutenKey,
     format: 'json',
-    title: title.trim(),
     hits: 10,
     outOfStockFlag: 0,
-  });
-  if (author) params.set('author', author.trim());
+    title: title.trim(),
+  };
 
-  const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
-  const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`corsproxy HTTP ${res.status}`);
-  const data = await res.json();
-  return (data.Items || []).map(i => i.Item || i);
+  const callRakuten = async (extraParams) => {
+    const p = new URLSearchParams({ ...baseParams, ...extraParams });
+    const url = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${p}`;
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`corsproxy HTTP ${res.status}`);
+    const data = await res.json();
+    return (data.Items || []).map(i => i.Item || i);
+  };
+
+  // まず title + author で検索
+  const items = await callRakuten(author ? { author: author.trim() } : {});
+  if (items.length > 0) return items;
+
+  // ヒットしなかった場合 title のみで再試行（翻訳書・著者名表記ゆれ対策）
+  if (author) {
+    await new Promise(r => setTimeout(r, 600));
+    return callRakuten({});
+  }
+  return [];
 }
 
 // ── AI RECOMMEND（Claude選書 → Rakutenで情報補完） ──
