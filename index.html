@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 11:54 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 12:18 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -799,7 +799,7 @@ async function analyzeBook() {
   }
 }
 
-// ── AI RECOMMEND（逆転アプローチ: Claude知識から選書 → Rakutenで情報補完） ──
+// ── AI RECOMMEND（Claude選書 → Rakutenで情報補完） ──
 async function doAiRecommend() {
   if (!claudeKey) { showToast('Claude APIキーを設定してください'); openSettings(); return; }
   const mood = document.getElementById('mood-input').value.trim();
@@ -813,17 +813,17 @@ async function doAiRecommend() {
   result.innerHTML = '<span style="color:var(--accent)">Claudeが選書中...</span>';
 
   try {
-    // ── Step 1: Claudeの知識から直接8冊を推薦させる ──
+    // ── Step 1: Claudeの知識から5冊を推薦 ──
     const genreHint = currentGenre ? `ジャンル: ${currentGenre}、` : '';
-    const eraHint = currentEra ? `年代: ${currentEra}年代、` : '';
-    const contextHint = (genreHint || eraHint) ? `（${genreHint}${eraHint}を考慮すること）` : '';
+    const eraHint   = currentEra   ? `年代: ${currentEra}年代、`  : '';
+    const ctx = (genreHint || eraHint) ? `（${genreHint}${eraHint}を考慮すること）` : '';
 
-    const sysPrompt = `あなたは日本の書籍に精通した書店員です。ユーザーの気分・好みに合う本を8冊推薦してください。
+    const sysPrompt = `あなたは日本の書籍に精通した書店員です。ユーザーの気分・好みに合う本を5冊推薦してください。
 条件:
-- 日本で広く知られ楽天ブックスで購入できる本を優先
+- 日本で広く知られ楽天ブックスで確実に購入できる本のみ
 - 国内作家・翻訳作品どちらも可
-- ISBNは13桁の数字のみ記載（不確かな場合は空文字にすること）
-- 以下のJSON配列のみを返す（マークダウン・説明文は一切不要）
+- ISBNは13桁の数字のみ（不確かなら空文字）
+- 以下のJSON配列のみ返す（マークダウン・説明文不要）
 [{"title":"書名","author":"著者名","isbn":"","reason":"推薦理由20字以内"}]`;
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -836,51 +836,53 @@ async function doAiRecommend() {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1200,
+        max_tokens: 700,
         system: sysPrompt,
-        messages: [{ role: 'user', content: `気分・好み: "${mood}"${contextHint}` }],
+        messages: [{ role: 'user', content: `気分・好み: "${mood}"${ctx}` }],
       }),
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error.message);
-    let text = d.content[0].text.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
-    const recommendations = JSON.parse(text);
+    let text = d.content[0].text.trim().replace(/^```[a-z]*\n?/i,'').replace(/\n?```$/,'');
+    const recs = JSON.parse(text);
 
-    result.innerHTML = `<span style="color:var(--accent)">楽天で書籍情報を取得中...（${recommendations.length}冊）</span>`;
-
-    // ── Step 2: 各書籍をRakutenで検索して価格・画像・評価を取得 ──
+    // ── Step 2: 各書籍のRakutenデータを取得（2秒間隔でレート制限回避） ──
     const enriched = [];
+    for (let i = 0; i < recs.length; i++) {
+      const rec = recs[i];
+      result.innerHTML = `<span style="color:var(--accent)">楽天で情報取得中... ${i + 1}/${recs.length}</span>`;
 
-    for (const rec of recommendations) {
-      // ISBN13が確かなら優先、なければkeyword検索
       const useIsbn = rec.isbn && /^\d{13}$/.test(rec.isbn);
-      const searchParams = useIsbn
-        ? { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, keyword: rec.isbn, hits: 5, outOfStockFlag: 0 }
-        : { format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey, keyword: rec.title.trim(), hits: 10, outOfStockFlag: 0 };
-      const params = new URLSearchParams(searchParams);
+      const keyword = useIsbn ? rec.isbn : rec.title.trim();
+      const params = new URLSearchParams({
+        format: 'json', applicationId: rakutenAppId, accessKey: rakutenKey,
+        keyword, hits: 10, outOfStockFlag: 0,
+      });
       const rakutenUrl = `https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404?${params}`;
-      // allorigins.win を使用（corsproxy.ioはキャッシュ問題あり）
-      const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(rakutenUrl)}`;
+      // &_cb でCDNキャッシュをバイパス（corsproxy.io対策）
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rakutenUrl)}&_cb=${Date.now()}`;
       try {
-        const res = await fetch(url);
+        const res = await fetch(proxyUrl, {
+          cache: 'no-store',
+          headers: {
+            'Referer': 'https://shotakdecsix-oss.github.io/books-dashboard/',
+            'Origin':  'https://shotakdecsix-oss.github.io',
+          }
+        });
         const data = res.ok ? await res.json() : {};
-        // 新エンドポイントは i.Item 形式のままだが、フォールバックとして i も試す
         const items = (data.Items || []).map(i => i.Item || i);
-        console.log(`[AI picks] "${rec.title}" → status=${res.status} hits=${items.length} keys=${Object.keys(items[0]||{}).slice(0,5)}`, items.map(i=>i.title));
-        // ISBNで検索した場合はそのまま、タイトル検索はマッチ確認
         const matched = useIsbn
-          ? items[0] || null
-          : items.find(item => isTitleMatch(rec.title, item.title || '')) || null;
-        enriched.push({ ...rec, rakuten: matched, _debug: { status: res.status, hits: items.length, first: items[0]?.title || '' } });
-      } catch (e) {
-        console.error(`[AI picks] "${rec.title}" → fetch error:`, e);
-        enriched.push({ ...rec, rakuten: null, _debug: { status: 0, hits: -1, first: String(e) } });
+          ? (items[0] || null)
+          : (items.find(item => isTitleMatch(rec.title, item.title || '')) || null);
+        enriched.push({ ...rec, rakuten: matched });
+      } catch {
+        enriched.push({ ...rec, rakuten: null });
       }
-      // corspoxy レート制限対策
-      await new Promise(r => setTimeout(r, 500));
+      // Rakutenレート制限対策: 次のリクエストまで2秒待機
+      if (i < recs.length - 1) await new Promise(r => setTimeout(r, 2000));
     }
 
-    // ── Step 3: AI選書セクションとして表示 ──
+    // ── Step 3: 表示 ──
     renderAiPicks(enriched, mood);
     result.classList.remove('show');
 
@@ -916,15 +918,14 @@ function renderAiPicks(picks, mood) {
     </div>`;
   const grid = document.getElementById('ai-pick-grid');
   picks.forEach((pick, idx) => {
-    const book = pick.rakuten;
-    // タイトル・著者は常にClaudeの推薦内容を使う
-    const title  = pick.title;
-    const author = pick.author || '著者不明';
-    // Rakutenデータはタイトルが一致する場合のみ表紙・価格に使用
-    const matched = book && isTitleMatch(pick.title, book.title || '');
-    const imgUrl   = matched ? book.largeImageUrl : null;
-    const stars    = matched ? starString(parseFloat(book.reviewAverage) || 0) : '';
-    const priceStr = matched ? `¥${Number(book.itemPrice || 0).toLocaleString()}` : null;
+    const book     = pick.rakuten;
+    const matched  = book && isTitleMatch(pick.title, book.title || '');
+    // タイトル・著者はClaudeの推薦を使う
+    const title    = pick.title;
+    const author   = pick.author || '著者不明';
+    const imgUrl   = matched ? (book.largeImageUrl || book.mediumImageUrl) : null;
+    const stars    = matched && book.reviewAverage ? starString(parseFloat(book.reviewAverage) || 0) : '';
+    const priceStr = matched && book.itemPrice ? `¥${Number(book.itemPrice).toLocaleString()}` : null;
 
     const card = document.createElement('div');
     card.className = 'ai-book-card';
@@ -935,7 +936,7 @@ function renderAiPicks(picks, mood) {
           ? `<img src="${esc(imgUrl)}" alt="${esc(title)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
           : `<div class="no-img">📖</div>`}
         <div class="ai-card-rank">${idx + 1}</div>
-        <div class="ai-reason-overlay">${esc(pick.reason)}</div>
+        ${pick.reason ? `<div class="ai-reason-overlay">${esc(pick.reason)}</div>` : ''}
       </div>
       <div class="card-body">
         <div class="card-title">${esc(title)}</div>
@@ -944,14 +945,8 @@ function renderAiPicks(picks, mood) {
           <span class="star">${stars}</span>
           <span class="rating-val">${book.reviewAverage}（${book.reviewCount || 0}件）</span>
         </div>` : ''}
-        <div class="price" style="${!priceStr ? 'color:var(--text2);font-size:.68rem;line-height:1.3' : ''}">
-          ${priceStr || (() => {
-            const d = pick._debug;
-            if (!d) return '楽天未掲載';
-            if (d.hits === -1) return `取得エラー`;
-            if (d.hits === 0) return `楽天未掲載（0件）`;
-            return `楽天未掲載（${d.hits}件）<br><span style="color:#666;font-size:.6rem">先頭: ${esc(d.first.slice(0,20))}</span>`;
-          })()}
+        <div class="price" style="${!priceStr ? 'color:var(--text2);font-size:.75rem' : ''}">
+          ${priceStr || (matched ? '価格不明' : '楽天未掲載')}
         </div>
       </div>`;
     grid.appendChild(card);
