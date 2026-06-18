@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 17:10 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 17:15 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -443,10 +443,10 @@ function openSettings() {
 }
 
 // ── INIT ──
-async function initDashboard() {
+function initDashboard() {
   const status = document.getElementById('api-status');
   status.textContent = '接続中...';
-  await loadBookGenres();
+  loadBookGenres(); // ジャンルは非同期でバックグラウンドロード
   fetchBooks(true);
 }
 
@@ -554,7 +554,7 @@ async function fetchBooks(reset = false) {
     totalResults = data.count || 0;
     const items = (data.Items || [])
       .map(i => i.Item)
-      .filter(b => parseInt(b.reviewCount || 0) >= MIN_REVIEW_COUNT);
+      .filter(b => b && parseInt(b.reviewCount || 0) >= MIN_REVIEW_COUNT);
 
     if (reset) books = items;
     else books = [...books, ...items];
