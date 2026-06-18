@@ -327,7 +327,7 @@
   <div class="logo">📚 書籍ランキング<span>楽天ブックス × Claude AI</span></div>
   <div class="header-status" id="api-status">接続中...</div>
   <div class="header-spacer"></div>
-  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 08:52 JST</div>
+  <div style="font-size:.7rem;color:var(--text2);white-space:nowrap">🕐 2026/06/18 09:48 JST</div>
   <button class="btn-icon" onclick="openSettings()">⚙ 設定</button>
 </header>
 
@@ -869,8 +869,9 @@ async function doAiRecommend() {
           }
         });
         const data = res.ok ? await res.json() : {};
-        const items = (data.Items || []).map(i => i.Item);
-        console.log(`[AI picks] "${rec.title}" → status=${res.status} hits=${items.length}`, items.slice(0,3).map(i=>i.title));
+        // 新エンドポイントは i.Item 形式のままだが、フォールバックとして i も試す
+        const items = (data.Items || []).map(i => i.Item || i);
+        console.log(`[AI picks] "${rec.title}" → status=${res.status} hits=${items.length} keys=${Object.keys(items[0]||{}).slice(0,5)}`, items.map(i=>i.title));
         // ISBNで検索した場合はそのまま、タイトル検索はマッチ確認
         const matched = useIsbn
           ? items[0] || null
